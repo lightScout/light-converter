@@ -5,6 +5,9 @@
  * chromatic dispersion) are the same fragment. Pointer moves the scene in parallax.
  */
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 const VERT = /* glsl */ `
   varying vec2 vUv;
@@ -52,9 +55,9 @@ const FRAG = /* glsl */ `
     float t = uTime;
 
     // sky
-    vec3 top = vec3(0.028, 0.040, 0.120);
-    vec3 mid = vec3(0.070, 0.095, 0.240);
-    vec3 low = vec3(0.180, 0.220, 0.430);
+    vec3 top = vec3(0.040, 0.043, 0.070);
+    vec3 mid = vec3(0.105, 0.112, 0.160);
+    vec3 low = vec3(0.300, 0.310, 0.380);
     float horizon = uHorizon + par.y * 0.6;
     float h = uv.y;
     vec3 col = mix(low, mid, smoothstep(horizon - 0.10, horizon + 0.25, h));
@@ -68,7 +71,7 @@ const FRAG = /* glsl */ `
       vec2 f = fract(sp) - 0.5;
       float d = length(f);
       float tw = 0.55 + 0.45 * sin(t * (0.8 + hash2(cell + 7.0) * 2.0) + hash2(cell + 3.0) * 6.28);
-      col += vec3(0.9, 0.95, 1.0) * smoothstep(0.18, 0.0, d) * tw * 0.7 * smoothstep(horizon + 0.05, horizon + 0.3, h);
+      col += vec3(0.97, 0.97, 1.0) * smoothstep(0.18, 0.0, d) * tw * 0.8 * smoothstep(horizon + 0.05, horizon + 0.3, h);
     }
 
     // planet
@@ -79,14 +82,14 @@ const FRAG = /* glsl */ `
     float disc = smoothstep(pr, pr - 0.004, pdist);
     float lit = smoothstep(-0.3, 0.9, -pd.y / pr) * 0.45 + 0.35;
     float tex = fbm(pd * 9.0 + 3.0) * 0.25;
-    vec3 planet = vec3(0.30, 0.36, 0.62) * (lit + tex);
-    col = mix(col, planet, disc * 0.7 * step(0.001, pr));
-    col += vec3(0.55, 0.62, 0.95) * smoothstep(pr + 0.05, pr - 0.01, pdist) * (1.0 - disc) * 0.18;
+    vec3 planet = vec3(0.46, 0.475, 0.55) * (lit + tex);
+    col = mix(col, planet, disc * 0.55 * step(0.001, pr));
+    col += vec3(0.90, 0.92, 1.0) * smoothstep(pr + 0.05, pr - 0.01, pdist) * (1.0 - disc) * 0.16;
 
     // horizon glow (breathing)
     float breath = 0.85 + 0.15 * sin(t * 0.35);
     float hg = exp(-abs(h - horizon) * 30.0) * 0.7 + exp(-abs(h - horizon) * 8.0) * 0.3;
-    col += vec3(0.98, 0.90, 0.72) * hg * 0.16 * uWarm * breath * (0.35 + 0.65 * exp(-abs(uv.x - 0.5) * 2.2));
+    col += vec3(1.0, 0.96, 0.86) * hg * 0.20 * uWarm * breath * (0.35 + 0.65 * exp(-abs(uv.x - 0.5) * 2.2));
 
     // mist
     vec2 mp = (uv + par) * vec2(aspect, 1.0);
@@ -94,16 +97,16 @@ const FRAG = /* glsl */ `
     float m2 = fbm(mp * 4.5 + vec2(-t * 0.02, t * 0.006) + 9.0);
     float below = smoothstep(horizon + 0.22, horizon - 0.35, h);
     float mist = smoothstep(0.28, 0.80, m1 * 0.7 + m2 * 0.3) * below;
-    vec3 mistCol = mix(vec3(0.55, 0.60, 0.85), vec3(0.85, 0.82, 0.95), smoothstep(horizon - 0.15, horizon + 0.05, h));
-    col = mix(col, mistCol, mist * 0.7 * uMist);
+    vec3 mistCol = mix(vec3(0.72, 0.73, 0.80), vec3(0.97, 0.96, 0.98), smoothstep(horizon - 0.15, horizon + 0.05, h));
+    col = mix(col, mistCol, mist * 0.6 * uMist);
     float wisp = smoothstep(0.55, 0.9, fbm(mp * 3.0 + vec2(t * 0.03, 0.0) + 21.0)) * smoothstep(horizon + 0.35, horizon, h) * smoothstep(horizon - 0.1, horizon + 0.05, h);
-    col += vec3(0.7, 0.72, 0.9) * wisp * 0.12 * uMist;
+    col += vec3(0.92, 0.92, 0.97) * wisp * 0.14 * uMist;
 
     // ridges
     float ridge1 = horizon - 0.18 + 0.06 * fbm(vec2(mp.x * 1.6 + 1.0, 0.0)) + 0.02 * sin(mp.x * 9.0);
     float ridge2 = horizon - 0.30 + 0.09 * fbm(vec2(mp.x * 1.1 + 5.0, 0.0));
-    col = mix(col, vec3(0.045, 0.06, 0.14), smoothstep(ridge1 + 0.01, ridge1 - 0.02, h) * 0.55 * uRidges);
-    col = mix(col, vec3(0.03, 0.04, 0.10), smoothstep(ridge2 + 0.01, ridge2 - 0.03, h) * 0.75 * uRidges);
+    col = mix(col, vec3(0.06, 0.065, 0.09), smoothstep(ridge1 + 0.01, ridge1 - 0.02, h) * 0.55 * uRidges);
+    col = mix(col, vec3(0.04, 0.042, 0.065), smoothstep(ridge2 + 0.01, ridge2 - 0.03, h) * 0.75 * uRidges);
 
     // aurora: curtains of light hanging from the sky, slowly folding
     if (uAurora > 0.5) {
@@ -113,7 +116,7 @@ const FRAG = /* glsl */ `
       float cur = fbm(vec2(ax * 5.0 - t * 0.05, h * 2.0)) ;
       float ray = pow(smoothstep(0.35, 0.95, cur), 2.0);
       float up = smoothstep(0.30, 0.75, h) * smoothstep(1.0, 0.7, h);
-      vec3 ac = mix(vec3(0.95, 0.86, 0.62), vec3(0.85, 0.90, 1.0), smoothstep(0.55, 0.8, h));
+      vec3 ac = mix(vec3(1.0, 0.92, 0.72), vec3(0.94, 0.95, 1.0), smoothstep(0.55, 0.8, h));
       col += ac * band * ray * 0.55 * up;
       // faint vertical streaks
       col += vec3(0.9, 0.92, 1.0) * pow(max(0.0, sin(ax * 40.0 + fold * 6.0)), 24.0) * band * 0.10 * up;
@@ -141,7 +144,7 @@ const FRAG = /* glsl */ `
       pow(max(0.0, cos((a + rot + 0.006) * n28)), 42.0),
       pow(max(0.0, cos((a + rot) * n28)), 42.0),
       pow(max(0.0, cos((a + rot - 0.006) * n28)), 42.0)) * fall;
-    vec3 lav = vec3(0.874, 0.898, 1.0), peri = vec3(0.43, 0.49, 0.96);
+    vec3 lav = vec3(0.96, 0.965, 1.0), peri = vec3(0.78, 0.80, 0.92);
     col += (glow * mix(peri, lav, 0.75) + rays * 0.9 + disp + core) * uQuasar;
 
     // god rays into the mist
@@ -159,12 +162,39 @@ const FRAG = /* glsl */ `
   }
 `;
 
+const MOTE_VERT = /* glsl */ `
+  attribute float aSeed;
+  uniform float uTime;
+  uniform vec2 uMouse;
+  uniform float uPixelRatio;
+  varying float vA;
+  void main() {
+    vec3 p = position;                      // x,y in -1..1 (NDC-ish), z = depth 0..1 (1 = near)
+    float sp = 0.02 + p.z * 0.05;
+    p.x += sin(uTime * (0.10 + aSeed * 0.15) + aSeed * 6.28) * sp;
+    p.y += cos(uTime * (0.08 + aSeed * 0.12) + aSeed * 3.1) * sp + fract(uTime * 0.004 * (0.5 + p.z)) * 0.0;
+    p.xy += uMouse * (0.015 + p.z * 0.05);  // near motes move more: parallax
+    gl_Position = vec4(p.xy, 0.0, 1.0);
+    gl_PointSize = (1.2 + p.z * 3.2) * uPixelRatio;
+    vA = (0.25 + 0.75 * p.z) * (0.6 + 0.4 * sin(uTime * (0.7 + aSeed * 1.5) + aSeed * 9.0));
+  }
+`;
+const MOTE_FRAG = /* glsl */ `
+  precision mediump float;
+  varying float vA;
+  void main() {
+    float d = length(gl_PointCoord - 0.5);
+    float a = smoothstep(0.5, 0.05, d) * vA;
+    gl_FragColor = vec4(vec3(1.0, 0.985, 0.95) * a, a);
+  }
+`;
+
 export type Variant = 'hero' | 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism';
 
 type Preset = { horizon: number; planet: [number, number]; planetR: number; mist: number; ridges: number; aurora: number; warm: number; stars: number; dim: number; quasar: number };
 const PRESETS: Record<Variant, Preset> = {
-  hero:     { horizon: 0.34, planet: [0.50, 0.86], planetR: 0.13, mist: 1.0, ridges: 1, aurora: 0, warm: 1.0, stars: 0.986, dim: 0.78, quasar: 1 },
-  valley:   { horizon: 0.30, planet: [0.82, 0.84], planetR: 0.11, mist: 1.0, ridges: 1, aurora: 0, warm: 1.6, stars: 0.988, dim: 0.55, quasar: 0 }, // Home: dawn in the valley
+  hero:     { horizon: 0.27, planet: [0.50, 0.86], planetR: 0.13, mist: 1.0, ridges: 1, aurora: 0, warm: 1.0, stars: 0.986, dim: 0.78, quasar: 1 },
+  valley:   { horizon: 0.27, planet: [0.82, 0.84], planetR: 0.11, mist: 1.0, ridges: 1, aurora: 0, warm: 1.6, stars: 0.988, dim: 0.55, quasar: 0 }, // Home: dawn in the valley
   cloudsea: { horizon: 0.22, planet: [0.5, 0.5],   planetR: 0.0,  mist: 1.4, ridges: 0, aurora: 0, warm: 0.6, stars: 0.992, dim: 0.42, quasar: 0 }, // Batch: above a sea of cloud, very quiet
   night:    { horizon: 0.18, planet: [0.20, 0.80], planetR: 0.07, mist: 0.5, ridges: 1, aurora: 0, warm: 0.3, stars: 0.972, dim: 0.5,  quasar: 0 }, // Batches: deep night, stars
   aurora:   { horizon: 0.24, planet: [0.5, 0.5],   planetR: 0.0,  mist: 0.6, ridges: 1, aurora: 1, warm: 0.8, stars: 0.984, dim: 0.55, quasar: 0 }, // Light: light itself, in curtains
@@ -208,9 +238,37 @@ export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number;
   const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, depthWrite: false, depthTest: false });
   scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
 
+  // Dust motes: a field of points with depth, drifting, catching the light. Denser near the horizon.
+  const COUNT = variant === 'still' ? 300 : 900;
+  const pos = new Float32Array(COUNT * 3), seed = new Float32Array(COUNT);
+  for (let i = 0; i < COUNT; i++) {
+    const z = Math.pow(Math.random(), 1.6);
+    pos[i * 3] = (Math.random() * 2 - 1) * 1.1;
+    pos[i * 3 + 1] = (Math.random() * 2 - 1) * 1.1;
+    pos[i * 3 + 2] = z;
+    seed[i] = Math.random();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  const moteUniforms = { uTime: { value: 0 }, uMouse: { value: uniforms.uMouse.value }, uPixelRatio: { value: renderer.getPixelRatio() } };
+  const motes = new THREE.Points(geo, new THREE.ShaderMaterial({
+    vertexShader: MOTE_VERT, fragmentShader: MOTE_FRAG, uniforms: moteUniforms,
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  }));
+  scene.add(motes);
+
+  // Bloom: bright things (quasar core, horizon, motes, aurora) actually glow.
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), variant === 'hero' ? 0.38 : 0.26, 0.55, 0.74);
+  composer.addPass(bloom);
+
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
     renderer.setSize(w, h, false);
+    composer.setSize(w, h);
+    bloom.resolution.set(Math.round(w / 2), Math.round(h / 2));
     uniforms.uRes.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
   };
   resize();
@@ -229,7 +287,8 @@ export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number;
     uniforms.uTime.value = reduced ? 0 : t;
     uniforms.uIntensity.value = Math.min(1, t / 1.8);
     uniforms.uMouse.value.lerp(target, 0.04);
-    renderer.render(scene, camera);
+    moteUniforms.uTime.value = reduced ? 0 : t;
+    composer.render();
     if (reduced && t > 2) return;
     raf = requestAnimationFrame(frame);
   };
@@ -247,7 +306,8 @@ export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number;
     ro.disconnect();
     removeEventListener('pointermove', onMove);
     document.removeEventListener('visibilitychange', onVis);
-    mat.dispose();
+    mat.dispose(); geo.dispose(); (motes.material as THREE.Material).dispose();
+    composer.dispose();
     renderer.dispose();
   };
 }

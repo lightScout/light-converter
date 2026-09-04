@@ -1,17 +1,17 @@
 /* Light Converter — v0.5 tokens: light is the main character.
    Whites lean warm-white for the subject of light, cool-white for its scatter. */
 :root {
-  --base: #090e24;
-  --base-2: #0d1330;
-  --glass: #161d3f;
+  --base: #0a0c15;
+  --base-2: #0e111d;
+  --glass: #191d2c;
   --text: #fbfcff;
-  --muted: #b7c0dc;
-  --dim: #7a84a8;
-  --primary: #6d7cf5;
-  --primary-2: #8d9af8;
-  --lavender: #dfe5ff;   /* scattered light: near-white with a blue cast */
+  --muted: #c4c8d6;
+  --dim: #858a9e;
+  --primary: #aeb6d6;
+  --primary-2: #c9cfe6;
+  --lavender: #eef0fb;   /* scattered light: near-white, a trace of blue */
   --beam: #ffffff;
-  --gold: #f1d59b;       /* Light, the currency: warm light */
+  --gold: #f3e1b8;       /* Light, the currency: warm light */
   --success: #a8f0cc;
   --glow: 251, 252, 255; /* rgb of white light for rgba() glows */
 
@@ -56,7 +56,7 @@ h1, h2, h3, p { margin: 0; }
   font-weight: 400;
   color: var(--lavender);
   letter-spacing: -0.01em;
-  text-shadow: 0 0 24px rgba(var(--glow), 0.35), 0 0 64px rgba(141, 154, 248, 0.25);
+  text-shadow: 0 0 24px rgba(var(--glow), 0.35), 0 0 64px rgba(var(--glow), 0.18);
 }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
@@ -100,7 +100,7 @@ h1, h2, h3, p { margin: 0; }
 /* Pointer light: a soft spot of light that follows the cursor over the page surface. */
 .spot {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(var(--glow), 0.07), rgba(141, 154, 248, 0.03) 40%, transparent 70%);
+  background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(var(--glow), 0.07), rgba(var(--glow), 0.025) 40%, transparent 70%);
   opacity: 0; transition: opacity 600ms;
 }
 .spot.on { opacity: 1; }

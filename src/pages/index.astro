@@ -24,7 +24,7 @@ import Scene from '../components/Scene.astro';
       </h1>
       <p class="muted lead">Clean cutouts, one image or a hundred. Pay only for the ones that work.</p>
       <DropZone client:load label="Drop images to try" />
-      <p class="dim fine">3 free · no account · no watermark</p>
+      <p class="muted fine">3 free · no account · no watermark</p>
     </section>
     <Spot />
   </main>
@@ -43,9 +43,9 @@ import Scene from '../components/Scene.astro';
   .hero {
     /* CSS fallback sky while the scene loads or if WebGL is unavailable */
     background:
-      radial-gradient(60% 30% at 50% 44%, rgba(223, 229, 255, 0.16), transparent 70%),
-      radial-gradient(80% 30% at 50% 62%, rgba(241, 213, 155, 0.10), transparent 70%),
-      linear-gradient(180deg, #070a1e 0%, #121a3d 55%, #2e3a6e 100%);
+      radial-gradient(60% 30% at 50% 44%, rgba(238, 240, 251, 0.16), transparent 70%),
+      radial-gradient(80% 30% at 50% 62%, rgba(243, 225, 184, 0.10), transparent 70%),
+      linear-gradient(180deg, #0a0b12 0%, #1a1c28 55%, #5b5f72 100%);
   }
 
   /* Title alive: a slow beam crossing the serif line, and a breathing bloom */
@@ -61,8 +61,8 @@ import Scene from '../components/Scene.astro';
   }
   @keyframes title-beam { 0%, 35% { background-position: 110% 0; } 65%, 100% { background-position: -10% 0; } }
   @keyframes title-breathe {
-    0%, 100% { filter: drop-shadow(0 0 18px rgba(var(--glow), 0.25)) drop-shadow(0 0 60px rgba(141, 154, 248, 0.18)); }
-    50%      { filter: drop-shadow(0 0 30px rgba(var(--glow), 0.45)) drop-shadow(0 0 90px rgba(141, 154, 248, 0.30)); }
+    0%, 100% { filter: drop-shadow(0 0 18px rgba(var(--glow), 0.25)) drop-shadow(0 0 60px rgba(var(--glow), 0.14)); }
+    50%      { filter: drop-shadow(0 0 30px rgba(var(--glow), 0.45)) drop-shadow(0 0 90px rgba(var(--glow), 0.24)); }
   }
   .line-1 { animation: title-breathe-soft 6s ease-in-out infinite; }
   @keyframes title-breathe-soft {
@@ -85,11 +85,13 @@ import Scene from '../components/Scene.astro';
     position: relative; z-index: 1;
     display: grid; justify-items: center; align-content: center;
     text-align: center;
-    padding: 0 24px 12vh;
+    padding: 0 24px 18vh;
   }
   h1 { display: grid; gap: 4px; }
   .line-1 { font-size: clamp(48px, 7.2vw, 88px); }
   .line-2 { font-size: clamp(54px, 8vw, 96px); line-height: 1; padding: 0.06em 0.12em 0.22em; margin: -0.06em -0.12em -0.22em; }
-  .lead { margin-top: 32px; font-size: 18px; max-width: 60ch; }
-  .fine { margin-top: 20px; font-size: 13px; }
+  .lead { margin-top: 32px; font-size: 18px; max-width: 60ch; text-shadow: 0 1px 14px rgba(10, 12, 21, 0.7); }
+  .fine { margin-top: 20px; font-size: 13px; text-shadow: 0 1px 10px rgba(10, 12, 21, 0.7); }
+  .copy :global(.wrap) { text-shadow: 0 1px 14px rgba(10, 12, 21, 0.6); }
+  .copy :global(.hint) { color: var(--muted); opacity: 0.85; }
 </style>
