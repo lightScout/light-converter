@@ -48,7 +48,7 @@ const readAsDataURL = (file: File) => new Promise<string>((res, rej) => {
 });
 
 /** Downscale big files so the mock store stays small. */
-async function shrink(file: File, max = 1200): Promise<string> {
+async function shrink(file: File, max = 2048): Promise<string> {
   const url = await readAsDataURL(file);
   const img = new Image();
   await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });

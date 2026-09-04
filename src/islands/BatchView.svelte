@@ -71,7 +71,7 @@
         {#if model.state === 'loading'}
           <span class="gold"> · loading model{model.total ? ` ${Math.round((model.loaded ?? 0) / model.total * 100)}%` : '…'}</span>
         {:else if model.state === 'ready'}
-          <span> · on this device ({model.backend})</span>
+          <span> · on this device ({model.model} · {model.backend})</span>
         {:else if model.state === 'error'}
           <span class="gold"> · model failed: {model.message}</span>
         {/if}
