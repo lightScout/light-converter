@@ -9,15 +9,16 @@
  * main thread only ships raw RGBA pixels and gets back a 0..1 alpha mask.
  */
 import * as ort from 'onnxruntime-web';
+import { refineAlpha } from './refine';
 
 export type Backend = 'webgpu' | 'wasm';
 export type WorkerIn =
   | { type: 'init'; base: string; force?: Backend }
-  | { type: 'run'; id: string; rgba: Uint8ClampedArray };
+  | { type: 'run'; id: string; rgba: Uint8ClampedArray; full: Uint8ClampedArray; width: number; height: number };
 export type WorkerOut =
   | { type: 'ready'; backend: Backend; model: string }
   | { type: 'progress'; loaded: number; total: number }
-  | { type: 'mask'; id: string; mask: Float32Array }
+  | { type: 'result'; id: string; rgba: Uint8ClampedArray; width: number; height: number }
   | { type: 'error'; id?: string; message: string };
 
 const SIZE = 1024;
@@ -164,22 +165,24 @@ async function init(base: string, force?: Backend) {
   post({ type: 'ready', backend, model: spec.name });
 }
 
-async function run(id: string, rgba: Uint8ClampedArray) {
+async function run(id: string, rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number) {
   if (!session) throw new Error('not ready');
   const input = new ort.Tensor('float32', preprocess(rgba, spec), [1, 3, SIZE, SIZE]);
   const t = performance.now();
   const out = await session.run({ input_image: input });
   const raw = out.output_image.data as Float32Array;
   const mask = postprocess(raw, spec);
-  console.info('[remover] run', spec.name, backend, Math.round(performance.now() - t), 'ms');
-  post({ type: 'mask', id, mask }, [mask.buffer]);
+  const t2 = performance.now();
+  const result = refineAlpha(full, width, height, mask, SIZE);
+  console.info('[remover] run', spec.name, backend, Math.round(t2 - t), 'ms + refine', Math.round(performance.now() - t2), 'ms');
+  post({ type: 'result', id, rgba: result, width, height }, [result.buffer]);
 }
 
 self.onmessage = async (e: MessageEvent<WorkerIn>) => {
   const msg = e.data;
   try {
     if (msg.type === 'init') await init(msg.base, msg.force);
-    else if (msg.type === 'run') await run(msg.id, msg.rgba);
+    else if (msg.type === 'run') await run(msg.id, msg.rgba, msg.full, msg.width, msg.height);
   } catch (err: any) {
     post({ type: 'error', id: (msg as any).id, message: err?.message || String(err) });
   }

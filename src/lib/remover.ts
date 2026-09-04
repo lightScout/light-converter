@@ -6,7 +6,8 @@ import type { WorkerIn, WorkerOut } from './remover.worker';
 
 const SIZE = 1024;
 
-type Pending = { resolve: (m: Float32Array) => void; reject: (e: Error) => void };
+type Result = { rgba: Uint8ClampedArray; width: number; height: number };
+type Pending = { resolve: (m: Result) => void; reject: (e: Error) => void };
 
 export interface RemoverStatus {
   state: 'idle' | 'loading' | 'ready' | 'error';
@@ -55,7 +56,7 @@ export function warmUp(): Promise<void> {
       const m = e.data;
       if (m.type === 'progress') setStatus({ state: 'loading', loaded: m.loaded, total: m.total });
       else if (m.type === 'ready') { setStatus({ state: 'ready', backend: m.backend, model: m.model }); resolve(); }
-      else if (m.type === 'mask') { pending.get(m.id)?.resolve(m.mask); pending.delete(m.id); }
+      else if (m.type === 'result') { pending.get(m.id)?.resolve({ rgba: m.rgba, width: m.width, height: m.height }); pending.delete(m.id); }
       else if (m.type === 'error') {
         if (m.id) { pending.get(m.id)?.reject(new Error(m.message)); pending.delete(m.id); }
         else { setStatus({ state: 'error', message: m.message }); reject(new Error(m.message)); }
@@ -73,29 +74,29 @@ async function decode(src: string): Promise<ImageBitmap> {
   return createImageBitmap(blob);
 }
 
-async function inferOnce(rgba: Uint8ClampedArray): Promise<Float32Array> {
+async function inferOnce(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number): Promise<Result> {
   const id = String(++seq);
-  return new Promise<Float32Array>((resolve, reject) => {
+  return new Promise<Result>((resolve, reject) => {
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`inference timed out after ${RUN_TIMEOUT_MS / 1000}s on ${status.backend}`)); }, RUN_TIMEOUT_MS);
     pending.set(id, {
       resolve: (m) => { clearTimeout(timer); resolve(m); },
       reject: (e) => { clearTimeout(timer); reject(e); },
     });
-    const msg: WorkerIn = { type: 'run', id, rgba };
-    worker!.postMessage(msg, [rgba.buffer]);
+    const msg: WorkerIn = { type: 'run', id, rgba, full, width, height };
+    worker!.postMessage(msg, [rgba.buffer, full.buffer]);
   });
 }
 
 /** Infer; if WebGPU stalls or throws, restart on WASM once and retry. */
-async function infer(rgba: Uint8ClampedArray): Promise<Float32Array> {
-  const copy = rgba.slice(); // keep a copy: the buffer is transferred to the worker
+async function infer(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number): Promise<Result> {
+  const copy = rgba.slice(), fullCopy = full.slice(); // buffers are transferred to the worker
   try {
-    return await inferOnce(rgba);
+    return await inferOnce(rgba, full, width, height);
   } catch (e) {
     if (status.backend === 'webgpu') {
       console.warn('[remover] webgpu run failed, retrying on wasm:', e);
       await restartOnWasm();
-      return inferOnce(copy);
+      return inferOnce(copy, fullCopy, width, height);
     }
     throw e;
   }
@@ -113,24 +114,19 @@ export async function removeBackground(src: string): Promise<string> {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bmp, 0, 0, SIZE, SIZE);
   const px = ctx.getImageData(0, 0, SIZE, SIZE).data;
-  const n = SIZE * SIZE;
 
-  const mask = await infer(px);
+  // full-res pixels for edge refinement
+  const fc = new OffscreenCanvas(W, H);
+  const fctx = fc.getContext('2d', { willReadFrequently: true })!;
+  fctx.drawImage(bmp, 0, 0);
+  const full = fctx.getImageData(0, 0, W, H).data;
+  bmp.close();
 
-  // post: mask → alpha at 1024², upscale to W×H with bilinear via canvas, apply to original
-  const mc = new OffscreenCanvas(SIZE, SIZE);
-  const mctx = mc.getContext('2d')!;
-  const mimg = mctx.createImageData(SIZE, SIZE);
-  for (let i = 0; i < n; i++) { const a = Math.round(mask[i] * 255); mimg.data[i * 4] = 255; mimg.data[i * 4 + 1] = 255; mimg.data[i * 4 + 2] = 255; mimg.data[i * 4 + 3] = a; }
-  mctx.putImageData(mimg, 0, 0);
+  const res = await infer(px, full, W, H);
 
   const out = new OffscreenCanvas(W, H);
   const octx = out.getContext('2d')!;
-  octx.drawImage(bmp, 0, 0);
-  octx.globalCompositeOperation = 'destination-in';
-  octx.imageSmoothingQuality = 'high';
-  octx.drawImage(mc, 0, 0, W, H);
-  bmp.close();
+  octx.putImageData(new ImageData(res.rgba, res.width, res.height), 0, 0);
 
   const blob = await out.convertToBlob({ type: 'image/png' });
   return new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(blob); });
