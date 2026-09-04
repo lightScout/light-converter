@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { readAll, type Batch } from '../lib/batches';
+  import { readAll, urlFor, type Batch } from '../lib/batches';
 
   let batches = $state<Batch[]>([]);
-  onMount(() => { batches = readAll().slice(0, 3); });
+  onMount(async () => { batches = (await readAll()).slice(0, 3); });
 
   const ago = (t: number) => {
     const m = Math.round((Date.now() - t) / 60000);
@@ -25,7 +25,7 @@
       {#each batches as b (b.id)}
         <li>
           <a href={`/app/batch?id=${b.id}`}>
-            <span class="thumb" style={`background-image:url(${b.images[0]?.result ?? b.images[0]?.src ?? ''})`}></span>
+            <span class="thumb" style={`background-image:url(${urlFor(b.images[0]?.result ?? b.images[0]?.src)})`}></span>
             <span class="meta">
               <span class="name">{b.name}</span>
               <span class="sub" class:gold={summary(b).startsWith('processing')} class:dim={!summary(b).startsWith('processing')}>{summary(b)}</span>

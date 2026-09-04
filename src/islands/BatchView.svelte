@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getBatch, runLocal, createBatch, upsert, type Batch } from '../lib/batches';
+  import { getBatch, runLocal, createBatch, upsert, urlFor, type Batch } from '../lib/batches';
   import { onStatus, type RemoverStatus } from '../lib/remover';
   import { downloadBatch, downloadImage } from '../lib/download';
 
@@ -22,11 +22,14 @@
   }
 
   onMount(() => {
-    const id = new URLSearchParams(location.search).get('id');
-    const b = id ? getBatch(id) : null;
-    if (!b) { missing = true; return; }
-    start(b);
-    const offStatus = onStatus(s => { model = s; });
+    let offStatus = () => {};
+    (async () => {
+      const id = new URLSearchParams(location.search).get('id');
+      const b = id ? await getBatch(id) : undefined;
+      if (!b) { missing = true; return; }
+      start(b);
+      offStatus = onStatus(s => { model = s; });
+    })();
 
     const drop = async (e: DragEvent) => {
       e.preventDefault();
@@ -34,7 +37,7 @@
       if (!files.length || !batch) return;
       const extra = await createBatch(files);
       batch.images.push(...extra.images);
-      upsert(batch);
+      await upsert(batch);
       start(batch);
     };
     const over = (e: DragEvent) => e.preventDefault();
@@ -83,10 +86,10 @@
     {#each batch.images as img (img.id)}
       <li class="tile" class:done={img.state === 'done'} class:queued={img.state === 'queued'} class:failed={img.state === 'failed'}>
         {#if img.state === 'done'}
-          <div class="checker result" style={`background-image:url(${img.result})`}></div>
+          <div class="checker result" style={`background-image:url(${urlFor(img.result)})`}></div>
           <button class="dl" onclick={() => downloadImage(img)} aria-label={`Download ${img.name}`}>Download</button>
         {:else}
-          <div class="orig" style={`background-image:url(${img.src})`}></div>
+          <div class="orig" style={`background-image:url(${urlFor(img.src)})`}></div>
           {#if img.state !== 'queued'}
             <span class="bar" style={`transform:scaleX(${img.progress})`}></span>
           {/if}

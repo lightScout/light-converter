@@ -69,9 +69,8 @@ export function warmUp(): Promise<void> {
   return ready;
 }
 
-async function decode(src: string): Promise<ImageBitmap> {
-  const blob = await (await fetch(src)).blob();
-  return createImageBitmap(blob);
+async function decode(src: Blob): Promise<ImageBitmap> {
+  return createImageBitmap(src);
 }
 
 async function inferOnce(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number): Promise<Result> {
@@ -102,8 +101,8 @@ async function infer(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: nu
   }
 }
 
-/** Returns a PNG data URL with alpha. */
-export async function removeBackground(src: string): Promise<string> {
+/** Returns a PNG blob with alpha. */
+export async function removeBackground(src: Blob): Promise<Blob> {
   await warmUp();
   const bmp = await decode(src);
   const { width: W, height: H } = bmp;
@@ -128,6 +127,5 @@ export async function removeBackground(src: string): Promise<string> {
   const octx = out.getContext('2d')!;
   octx.putImageData(new ImageData(res.rgba, res.width, res.height), 0, 0);
 
-  const blob = await out.convertToBlob({ type: 'image/png' });
-  return new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(blob); });
+  return out.convertToBlob({ type: 'image/png' });
 }
