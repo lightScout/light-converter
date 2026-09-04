@@ -3,9 +3,10 @@ import Base from './Base.astro';
 import Star from '../components/Star.astro';
 import Spot from '../components/Spot.astro';
 import Scene from '../components/Scene.astro';
+import Frame from '../components/Frame.astro';
 
-interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings'; scene?: 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism' }
-const { title, active, scene } = Astro.props;
+interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings'; scene?: 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism'; status?: string }
+const { title, active, scene, status = 'Drop images anywhere' } = Astro.props;
 const variant = scene ?? ({ home: 'valley', batches: 'night', light: 'aurora', settings: 'still' } as const)[active];
 
 const items = [
@@ -14,123 +15,111 @@ const items = [
   { id: 'light', label: 'Light', href: '/app/light' },
   { id: 'settings', label: 'Settings', href: '/app/settings' },
 ] as const;
+const links = [
+  { n: '01', label: 'Pricing', href: '/pricing' },
+  { n: '02', label: 'Landing', href: '/' },
+  { n: '03', label: 'Sign out', href: '/' },
+];
 ---
 <Base title={title ? `${title} — Light Converter` : 'Light Converter'}>
   <div class="app">
     <Scene mode="ambient" variant={variant} />
+    <Frame />
+
+    <header class="hud top">
+      <a href="/app" class="brand"><Star size={16} color="var(--lavender)" /><span class="label" data-scramble>Light Converter</span></a>
+      <span class="label dim" data-scramble>{title ?? 'Home'}</span>
+    </header>
 
     <aside class="rail" aria-label="Main">
-      <a href="/app" class="brand">
-        <Star size={18} color="var(--lavender)" />
-        <span class="label">LIGHT CONVERTER</span>
-      </a>
-
-      <nav>
+      <nav class="icons">
         {items.map(it => (
-          <a href={it.href} class:list={['item', { active: it.id === active }]} aria-current={it.id === active ? 'page' : undefined}>
+          <a href={it.href} class:list={['item', { active: it.id === active }]} aria-current={it.id === active ? 'page' : undefined} title={it.label}>
             <span class="icon" aria-hidden="true">
               {it.id === 'home' && <svg viewBox="0 0 20 20"><path d="M4 9.5 10 4.5l6 5V16H4z" /></svg>}
-              {it.id === 'batches' && <svg viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="3" /></svg>}
+              {it.id === 'batches' && <svg viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="2" /></svg>}
               {it.id === 'light' && <Star size={16} color="currentColor" />}
               {it.id === 'settings' && <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" /><circle cx="10" cy="10" r="2" /></svg>}
             </span>
-            <span class="label">{it.label}</span>
           </a>
         ))}
       </nav>
 
-      <a href="/app/light" class="user">
-        <span class="avatar" aria-hidden="true"></span>
-        <span class="label who">
-          <span class="name">Juan</span>
-          <span class="mono gold bal">128 Light</span>
-        </span>
-        <span class="mono gold bal-mini">128</span>
-      </a>
+      <div class="menu panel-light" aria-label="Menu">
+        <span class="label sq">Explore</span>
+        <nav class="big">
+          {items.map(it => <a href={it.href} class:list={['display', { active: it.id === active }]}>{it.label}</a>)}
+        </nav>
+        <span class="label sq">Links</span>
+        <div class="links">
+          {links.map(l => <a href={l.href} class="row"><span class="label">{l.label}</span><span class="label dim">{l.n}</span></a>)}
+        </div>
+        <div class="foot">
+          <span class="label">Juan</span>
+          <span class="label gold-dark">128 Light</span>
+        </div>
+      </div>
     </aside>
 
     <main class="content">
       <slot />
     </main>
+
+    <footer class="hud bottom cells">
+      <span class="label gold" data-scramble>128 Light</span>
+      <span class="grow"><span class="label dim" id="status" data-scramble>{status}</span></span>
+      <span class="label dim" data-scramble>WebGPU · on device</span>
+    </footer>
     <Spot />
   </div>
 </Base>
 
+<script>
+  import { scrambleAll } from '../lib/scramble';
+  scrambleAll(document, 30);
+</script>
+
 <style>
   .app { position: relative; min-height: 100svh; isolation: isolate; }
+  .hud { position: fixed; z-index: 6; }
+  .top { top: 32px; left: 44px; right: 44px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  .top a { pointer-events: auto; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; }
+  .brand .label { letter-spacing: 0.22em; font-weight: 600; }
+  .brand :global(svg) { filter: drop-shadow(0 0 8px rgba(var(--glow), 0.6)); }
+  .bottom { left: 15px; right: 15px; bottom: 15px; color: var(--muted); background: rgba(3, 10, 24, 0.55); backdrop-filter: blur(10px); }
 
-  .rail {
-    position: fixed; inset: 0 auto 0 0;
-    width: var(--rail);
-    display: flex; flex-direction: column;
-    padding: 24px 0;
-    background: color-mix(in srgb, var(--base-2) 80%, transparent);
-    backdrop-filter: blur(14px);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-    z-index: 10;
-    transition: width 220ms var(--ease);
-  }
-  .rail:hover, .rail:focus-within { width: var(--rail-open); }
-
-  .label {
-    white-space: nowrap;
-    opacity: 0;
-    transform: translateX(-6px);
-    transition: opacity 160ms ease 40ms, transform 220ms var(--ease) 40ms;
-  }
-  .rail:hover .label, .rail:focus-within .label { opacity: 1; transform: none; transition-delay: 80ms; }
-
-  .brand {
-    display: flex; align-items: center; gap: 14px;
-    height: 36px; padding: 0 27px;
-    font-size: 12px; font-weight: 600; letter-spacing: 0.2em;
-  }
-  .brand :global(svg) { flex: none; }
-
-  nav { display: grid; gap: 8px; margin-top: 44px; padding: 0 16px; }
-  .item {
-    display: flex; align-items: center; gap: 14px;
-    height: 40px; padding: 0 11px;
-    border-radius: 10px;
-    color: var(--muted);
-    transition: color 200ms, background 200ms;
-  }
+  /* Rail: icons only; hovering opens the inverted menu panel over the content. */
+  .rail { position: fixed; left: 15px; top: 15px; bottom: 79px; width: var(--rail); z-index: 8; }
+  .icons { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; padding: 0 18px; }
+  .item { display: grid; place-items: center; width: 36px; height: 36px; color: var(--dim); transition: color 200ms; }
   .item:hover { color: var(--text); }
-  .item.active {
-    color: var(--text);
-    background: color-mix(in srgb, var(--glass) 80%, transparent);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 24px rgba(var(--glow), 0.06);
-  }
-  .item.active .icon { filter: drop-shadow(0 0 6px rgba(var(--glow), 0.6)); }
-  .brand :global(svg) { filter: drop-shadow(0 0 8px rgba(var(--glow), 0.55)); }
-  .icon { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
+  .item.active { color: var(--text); }
+  .item.active .icon { filter: drop-shadow(0 0 6px rgba(var(--glow), 0.7)); }
+  .icon { width: 18px; height: 18px; display: grid; place-items: center; }
   .icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 
-  .user {
-    margin-top: auto;
-    display: flex; align-items: center; gap: 14px;
-    padding: 0 20px;
-    position: relative;
+  .menu {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 380px;
+    padding: 32px 36px;
+    display: grid; grid-template-rows: auto 1fr auto auto auto; gap: 18px;
+    --cut: 22px;
+    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+    transform: translateX(calc(-100% - 20px)); opacity: 0;
+    transition: transform 380ms var(--ease), opacity 260ms;
+    pointer-events: none;
   }
-  .avatar {
-    width: 32px; height: 32px; border-radius: 50%; flex: none;
-    background: linear-gradient(160deg, #e9ecf7, #4a4f63);
-  }
-  .who { display: grid; line-height: 1.3; }
-  .name { font-size: 14px; font-weight: 500; }
-  .bal { font-size: 12px; }
-  .bal-mini {
-    position: absolute; left: 0; right: 0; top: 40px;
-    text-align: center; font-size: 11px;
-    transition: opacity 120ms;
-  }
-  .rail:hover .bal-mini, .rail:focus-within .bal-mini { opacity: 0; }
+  .rail:hover .menu, .rail:focus-within .menu { transform: none; opacity: 1; pointer-events: auto; transition-delay: 120ms; }
+  .rail:hover .icons, .rail:focus-within .icons { opacity: 0; transition-delay: 120ms; }
+  .icons { transition: opacity 200ms; }
+  .big { display: grid; align-content: start; gap: 2px; margin-top: 8px; }
+  .big a { font-size: 52px; line-height: 1.02; color: var(--base); opacity: 0.55; transition: opacity 200ms, transform 300ms var(--ease); }
+  .big a:hover, .big a.active { opacity: 1; transform: translateX(6px); }
+  .links { display: grid; }
+  .links .row { padding: 12px 0; }
+  .foot { display: flex; justify-content: space-between; border-top: 1px solid rgba(2, 10, 24, 0.12); padding-top: 18px; }
+  .gold-dark { color: #7a5a1a; }
 
-  .content {
-    margin-left: var(--rail);
-    min-height: 100svh;
-    padding: 96px 96px 64px 228px;
-  }
-  @media (max-width: 1100px) { .content { padding: 72px 40px 48px 64px; } }
+  .content { margin-left: var(--rail); min-height: 100svh; padding: 110px 96px 110px 200px; }
+  @media (max-width: 1100px) { .content { padding: 96px 40px 96px 96px; } }
 </style>

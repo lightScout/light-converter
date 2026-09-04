@@ -55,9 +55,9 @@ const FRAG = /* glsl */ `
     float t = uTime;
 
     // sky
-    vec3 top = vec3(0.040, 0.043, 0.070);
-    vec3 mid = vec3(0.105, 0.112, 0.160);
-    vec3 low = vec3(0.300, 0.310, 0.380);
+    vec3 top = vec3(0.010, 0.030, 0.080);
+    vec3 mid = vec3(0.035, 0.080, 0.180);
+    vec3 low = vec3(0.120, 0.220, 0.420);
     float horizon = uHorizon + par.y * 0.6;
     float h = uv.y;
     vec3 col = mix(low, mid, smoothstep(horizon - 0.10, horizon + 0.25, h));
@@ -82,14 +82,14 @@ const FRAG = /* glsl */ `
     float disc = smoothstep(pr, pr - 0.004, pdist);
     float lit = smoothstep(-0.3, 0.9, -pd.y / pr) * 0.45 + 0.35;
     float tex = fbm(pd * 9.0 + 3.0) * 0.25;
-    vec3 planet = vec3(0.46, 0.475, 0.55) * (lit + tex);
+    vec3 planet = vec3(0.30, 0.40, 0.62) * (lit + tex);
     col = mix(col, planet, disc * 0.55 * step(0.001, pr));
     col += vec3(0.90, 0.92, 1.0) * smoothstep(pr + 0.05, pr - 0.01, pdist) * (1.0 - disc) * 0.16;
 
     // horizon glow (breathing)
     float breath = 0.85 + 0.15 * sin(t * 0.35);
     float hg = exp(-abs(h - horizon) * 30.0) * 0.7 + exp(-abs(h - horizon) * 8.0) * 0.3;
-    col += vec3(1.0, 0.96, 0.86) * hg * 0.20 * uWarm * breath * (0.35 + 0.65 * exp(-abs(uv.x - 0.5) * 2.2));
+    col += vec3(0.75, 0.88, 1.0) * hg * 0.22 * uWarm * breath * (0.35 + 0.65 * exp(-abs(uv.x - 0.5) * 2.2));
 
     // mist
     vec2 mp = (uv + par) * vec2(aspect, 1.0);
@@ -97,16 +97,16 @@ const FRAG = /* glsl */ `
     float m2 = fbm(mp * 4.5 + vec2(-t * 0.02, t * 0.006) + 9.0);
     float below = smoothstep(horizon + 0.22, horizon - 0.35, h);
     float mist = smoothstep(0.28, 0.80, m1 * 0.7 + m2 * 0.3) * below;
-    vec3 mistCol = mix(vec3(0.72, 0.73, 0.80), vec3(0.97, 0.96, 0.98), smoothstep(horizon - 0.15, horizon + 0.05, h));
-    col = mix(col, mistCol, mist * 0.6 * uMist);
+    vec3 mistCol = mix(vec3(0.22, 0.36, 0.64), vec3(0.70, 0.82, 1.0), smoothstep(horizon - 0.15, horizon + 0.05, h));
+    col = mix(col, mistCol, mist * 0.5 * uMist);
     float wisp = smoothstep(0.55, 0.9, fbm(mp * 3.0 + vec2(t * 0.03, 0.0) + 21.0)) * smoothstep(horizon + 0.35, horizon, h) * smoothstep(horizon - 0.1, horizon + 0.05, h);
-    col += vec3(0.92, 0.92, 0.97) * wisp * 0.14 * uMist;
+    col += vec3(0.75, 0.86, 1.0) * wisp * 0.14 * uMist;
 
     // ridges
     float ridge1 = horizon - 0.18 + 0.06 * fbm(vec2(mp.x * 1.6 + 1.0, 0.0)) + 0.02 * sin(mp.x * 9.0);
     float ridge2 = horizon - 0.30 + 0.09 * fbm(vec2(mp.x * 1.1 + 5.0, 0.0));
-    col = mix(col, vec3(0.06, 0.065, 0.09), smoothstep(ridge1 + 0.01, ridge1 - 0.02, h) * 0.55 * uRidges);
-    col = mix(col, vec3(0.04, 0.042, 0.065), smoothstep(ridge2 + 0.01, ridge2 - 0.03, h) * 0.75 * uRidges);
+    col = mix(col, vec3(0.020, 0.045, 0.100), smoothstep(ridge1 + 0.01, ridge1 - 0.02, h) * 0.55 * uRidges);
+    col = mix(col, vec3(0.012, 0.028, 0.070), smoothstep(ridge2 + 0.01, ridge2 - 0.03, h) * 0.75 * uRidges);
 
     // aurora: curtains of light hanging from the sky, slowly folding
     if (uAurora > 0.5) {
@@ -116,7 +116,7 @@ const FRAG = /* glsl */ `
       float cur = fbm(vec2(ax * 5.0 - t * 0.05, h * 2.0)) ;
       float ray = pow(smoothstep(0.35, 0.95, cur), 2.0);
       float up = smoothstep(0.30, 0.75, h) * smoothstep(1.0, 0.7, h);
-      vec3 ac = mix(vec3(1.0, 0.92, 0.72), vec3(0.94, 0.95, 1.0), smoothstep(0.55, 0.8, h));
+      vec3 ac = mix(vec3(0.35, 0.65, 1.0), vec3(0.85, 0.93, 1.0), smoothstep(0.55, 0.8, h));
       col += ac * band * ray * 0.55 * up;
       // faint vertical streaks
       col += vec3(0.9, 0.92, 1.0) * pow(max(0.0, sin(ax * 40.0 + fold * 6.0)), 24.0) * band * 0.10 * up;
@@ -144,7 +144,7 @@ const FRAG = /* glsl */ `
       pow(max(0.0, cos((a + rot + 0.006) * n28)), 42.0),
       pow(max(0.0, cos((a + rot) * n28)), 42.0),
       pow(max(0.0, cos((a + rot - 0.006) * n28)), 42.0)) * fall;
-    vec3 lav = vec3(0.96, 0.965, 1.0), peri = vec3(0.78, 0.80, 0.92);
+    vec3 lav = vec3(0.90, 0.94, 1.0), peri = vec3(0.45, 0.65, 1.0);
     col += (glow * mix(peri, lav, 0.75) + rays * 0.9 + disp + core) * uQuasar;
 
     // god rays into the mist
@@ -185,7 +185,7 @@ const MOTE_FRAG = /* glsl */ `
   void main() {
     float d = length(gl_PointCoord - 0.5);
     float a = smoothstep(0.5, 0.05, d) * vA;
-    gl_FragColor = vec4(vec3(1.0, 0.985, 0.95) * a, a);
+    gl_FragColor = vec4(vec3(0.80, 0.90, 1.0) * a, a);
   }
 `;
 

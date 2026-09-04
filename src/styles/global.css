@@ -1,19 +1,22 @@
 /* Light Converter — v0.5 tokens: light is the main character.
    Whites lean warm-white for the subject of light, cool-white for its scatter. */
 :root {
-  --base: #0a0c15;
-  --base-2: #0e111d;
-  --glass: #191d2c;
-  --text: #fbfcff;
-  --muted: #c4c8d6;
-  --dim: #858a9e;
-  --primary: #aeb6d6;
-  --primary-2: #c9cfe6;
-  --lavender: #eef0fb;   /* scattered light: near-white, a trace of blue */
+  --base: #030a18;       /* deep navy — the dark the light sits in */
+  --base-2: #061024;
+  --glass: #0d1a36;
+  --text: #f4f7ff;
+  --muted: #b9c6e8;
+  --dim: #6f7fa8;
+  --primary: #8fb3ff;
+  --primary-2: #b8cfff;
+  --lavender: #d5e0ff;   /* off-blue: scattered light */
   --beam: #ffffff;
+  --electric: #3d8bff;   /* light in transit */
+  --off: #d5e0ff;        /* inverted surfaces (menu panel, primary chip) */
   --gold: #f3e1b8;       /* Light, the currency: warm light */
   --success: #a8f0cc;
-  --glow: 251, 252, 255; /* rgb of white light for rgba() glows */
+  --glow: 213, 224, 255; /* rgb of scattered light for rgba() glows */
+  --blue: 61, 139, 255;  /* rgb of electric blue */
 
   --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
@@ -56,7 +59,7 @@ h1, h2, h3, p { margin: 0; }
   font-weight: 400;
   color: var(--lavender);
   letter-spacing: -0.01em;
-  text-shadow: 0 0 24px rgba(var(--glow), 0.35), 0 0 64px rgba(var(--glow), 0.18);
+  text-shadow: 0 0 24px rgba(var(--glow), 0.35), 0 0 64px rgba(var(--blue), 0.25);
 }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
@@ -161,3 +164,53 @@ h1, h2, h3, p { margin: 0; }
   .reveal::before, .reveal::after { display: none; }
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* ---- HUD vocabulary (from the hubtown study) ------------------------------------------------ */
+/* Mono label: uppercase, tracked. */
+.label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
+.label.sq::before { content: ''; display: inline-block; width: 5px; height: 5px; background: currentColor; margin-right: 10px; vertical-align: 1px; }
+
+/* Bevel chip: a corner cut top-left and bottom-right. Dark by default; .light inverts. */
+.bevel {
+  --cut: 9px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 16px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
+  color: var(--text);
+  background: rgba(var(--glow), 0.06);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: background 200ms, color 200ms;
+}
+.bevel:hover { background: rgba(var(--glow), 0.12); }
+.bevel.light { background: var(--off); color: var(--base); }
+.bevel.light:hover { background: #fff; }
+.bevel .glyph { width: 8px; height: 8px; flex: none; background:
+  linear-gradient(currentColor, currentColor) 0 0 / 3px 3px no-repeat,
+  linear-gradient(currentColor, currentColor) 100% 100% / 3px 3px no-repeat,
+  linear-gradient(currentColor, currentColor) 100% 0 / 3px 3px no-repeat; }
+
+/* Chamfered page frame — the whole screen sits inside it. */
+.frame-svg { position: fixed; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); pointer-events: none; z-index: 5; }
+.frame-svg path { fill: none; stroke: rgba(var(--glow), 0.16); stroke-width: 1px; }
+
+/* Hairline cells for the bottom bar. */
+.cells { display: flex; align-items: stretch; border-top: 1px solid rgba(var(--glow), 0.10); }
+.cells > * { display: flex; align-items: center; padding: 0 22px; height: 48px; }
+.cells > * + * { border-left: 1px solid rgba(var(--glow), 0.10); }
+.cells .grow { flex: 1; justify-content: center; }
+
+/* Inverted panel (menu / list): off-blue with black display type. */
+.panel-light { background: var(--off); color: var(--base); }
+.panel-light .display { font-weight: 800; letter-spacing: -0.03em; text-transform: uppercase; }
+.panel-light .dim { color: #4b5a86; }
+.panel-light .row { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; border-top: 1px solid rgba(2, 10, 24, 0.12); }
+
+/* Square loader: a row of cells, the lit one scans; fill grows with progress. */
+.sqload { display: inline-flex; gap: 12px; }
+.sqload i { width: 6px; height: 6px; background: currentColor; opacity: 0.18; }
+.sqload i.on { opacity: 1; box-shadow: 0 0 8px rgba(var(--glow), 0.8); }
+.sqload i.done { opacity: 0.7; }
+
+/* Crosshair marker for spec blocks. */
+.cross { position: relative; }
+.cross::before { content: '+'; position: absolute; left: -18px; top: -2px; font-family: var(--font-mono); font-size: 12px; color: var(--dim); }

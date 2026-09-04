@@ -3,6 +3,7 @@
   import { getBatch, runLocal, createBatch, upsert, urlFor, type Batch } from '../lib/batches';
   import { onStatus, type RemoverStatus } from '../lib/remover';
   import { downloadBatch, downloadImage } from '../lib/download';
+  import Loader from '../components/Loader.svelte';
 
   let batch = $state<Batch | null>(null);
   let missing = $state(false);
@@ -66,25 +67,27 @@
         <span class="display title">{batch.name}</span>
         <span class="accent count">{done} of {total}</span>
       </h1>
-      <p class="dim sub">
+      <p class="dim sub label">
         {batch.format} · {batch.size} · {held} Light
-        {#if model.state === 'loading'}
-          <span class="gold"> · loading model{model.total ? ` ${Math.round((model.loaded ?? 0) / model.total * 100)}%` : '…'}</span>
-        {:else if model.state === 'ready'}
-          <span> · on this device ({model.model} · {model.backend})</span>
+        {#if model.state === 'ready'}
+          <span> · {model.model} · {model.backend}</span>
         {:else if model.state === 'error'}
           <span class="gold"> · model failed: {model.message}</span>
         {/if}
       </p>
+      {#if model.state === 'loading'}
+        <div class="load"><Loader label="Loading model" progress={model.total ? (model.loaded ?? 0) / model.total : null} /></div>
+      {/if}
     </div>
     {#if done > 0}
-      <button class="cta act" onclick={download} disabled={zipping}>{zipping ? 'Zipping…' : `Download ${done === total ? 'all' : `${done} ready`}`}</button>
+      <button class="bevel light act" onclick={download} disabled={zipping}><i class="glyph"></i>{zipping ? 'Zipping…' : `Download ${done === total ? 'all' : `${done} ready`}`}</button>
     {/if}
   </header>
 
   <ul class="grid">
-    {#each batch.images as img (img.id)}
+    {#each batch.images as img, i (img.id)}
       <li class="tile" class:done={img.state === 'done'} class:queued={img.state === 'queued'} class:failed={img.state === 'failed'}>
+        <span class="label idx sq">{String(i + 1).padStart(3, '0')}</span>
         {#if img.state === 'done'}
           <div class="checker result" style={`background-image:url(${urlFor(img.result)})`}></div>
           <div class="reveal" aria-hidden="true"></div>
@@ -106,15 +109,19 @@
   .title { font-size: 40px; font-weight: 300; letter-spacing: -0.02em; }
   .count { font-size: 34px; transition: text-shadow 300ms; }
   .head:has(.tile) .count { }
-  .sub { margin-top: 10px; font-size: 13px; }
-  .act { font-size: 16px; margin-top: 14px; white-space: nowrap; }
+  .sub { margin-top: 12px; }
+  .load { margin-top: 18px; color: var(--muted); }
+  .act { margin-top: 10px; white-space: nowrap; }
+  .act:disabled { opacity: 0.5; }
 
   .grid {
     list-style: none; margin: 56px 0 0; padding: 0;
     display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 32px;
   }
   .tile {
-    position: relative; aspect-ratio: 1; border-radius: 28px; overflow: hidden;
+    position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
+    --cut: 18px;
+    clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
     background: rgba(var(--glow), 0.02);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
     transition: box-shadow 300ms, background 300ms;
@@ -123,6 +130,8 @@
   .tile.failed { box-shadow: inset 0 0 0 1px rgba(241, 213, 155, 0.35); }
   .tile.done { background: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10), 0 0 48px rgba(var(--glow), 0.06); animation: land 700ms var(--ease); }
   @keyframes land { from { opacity: 0; transform: scale(0.98); } }
+  .idx { position: absolute; right: 14px; top: 12px; z-index: 2; color: var(--dim); font-size: 10px; }
+  .tile.done .idx { color: #4b5a86; }
   .reveal { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
 
   .result, .orig { position: absolute; inset: 0; background-size: contain; background-position: center; background-repeat: no-repeat; }

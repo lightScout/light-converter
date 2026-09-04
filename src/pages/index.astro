@@ -1,97 +1,120 @@
 ---
 import Base from '../layouts/Base.astro';
 import Star from '../components/Star.astro';
+import Frame from '../components/Frame.astro';
 import DropZone from '../islands/DropZone.svelte';
 import Spot from '../components/Spot.astro';
-import Scene from '../components/Scene.astro';
+
+const beats = [
+  { id: 'lift', label: 'Lift', h1: 'Lift the subject.', h2: 'Keep the light.', p: 'Clean cutouts, one image or a hundred. Pay only for the ones that work.' },
+  { id: 'keep', label: 'Keep', h1: 'Nothing leaves', h2: 'your device.', p: 'The free tier runs the model on your own GPU. Your photos stay yours.' },
+  { id: 'light', label: 'Light', h1: 'Everything runs', h2: 'on Light.', p: 'One Light is one clean cutout. Fifteen free every month, no watermark, ever.' },
+];
 ---
 <Base>
-  <main class="hero">
-    <Scene mode="hero" centerY={0.6} class="hero-scene" />
+  <div class="stage">
+    <canvas class="hero3d" id="hero3d" aria-hidden="true"></canvas>
+    <Frame />
 
-    <header class="nav">
-      <a href="/" class="brand"><Star size={18} color="var(--lavender)" /><span>LIGHT CONVERTER</span></a>
+    <header class="hud top">
+      <a href="/" class="brand"><Star size={16} color="var(--lavender)" /><span class="label" data-scramble>Light Converter</span></a>
       <nav>
-        <a href="/pricing">Pricing</a>
-        <a href="/app">Sign in</a>
+        <a class="label" href="/pricing" data-scramble>Pricing</a>
+        <a class="label" href="/app" data-scramble>Sign in</a>
+        <a href="/app" class="bevel"><i class="glyph"></i><span data-scramble>Open app</span></a>
       </nav>
     </header>
 
-    <section class="copy">
-      <h1>
-        <span class="display line-1">Lift the subject.</span>
-        <span class="accent line-2">Keep the light.</span>
-      </h1>
-      <p class="muted lead">Clean cutouts, one image or a hundred. Pay only for the ones that work.</p>
-      <DropZone client:load label="Drop images to try" />
-      <p class="muted fine">3 free · no account · no watermark</p>
+    <aside class="hud index" aria-label="Sections">
+      {beats.map((b, i) => <a class="label sq" href={`#${b.id}`} data-i={i} class:list={[{ on: i === 0 }]} data-scramble>{b.label}</a>)}
+    </aside>
+
+    <footer class="hud bottom cells">
+      <span class="label dim" data-scramble>3 free · no account · no watermark</span>
+      <span class="grow"><i class="fill" id="fill"></i><span class="label scroll"><i></i><span data-scramble>Scroll to explore</span></span></span>
+      <span class="label dim" data-scramble>WebGPU · on device</span>
+    </footer>
+
+    <section class="copy" id="copy">
+      {beats.map((b, i) => (
+        <article id={b.id} class:list={['beat', { on: i === 0 }]} data-i={i}>
+          <h1>
+            <span class="display line-1">{b.h1}</span>
+            <span class="accent line-2">{b.h2}</span>
+          </h1>
+          <p class="muted lead">{b.p}</p>
+          {i === 0 && <DropZone client:load label="Drop images to try" />}
+          {i === 2 && <a class="bevel light" href="/pricing"><i class="glyph"></i>See plans</a>}
+        </article>
+      ))}
     </section>
     <Spot />
-  </main>
+  </div>
+  <div class="track" aria-hidden="true"></div>
 </Base>
 
+<script>
+  import { scrambleAll } from '../lib/scramble';
+  const canvas = document.getElementById('hero3d') as HTMLCanvasElement | null;
+  if (canvas) {
+    import('../islands/hero3d').then(({ mountHero }) => { mountHero(canvas); canvas.classList.add('is-live'); });
+  }
+  scrambleAll(document, 30);
+  const beats = [...document.querySelectorAll<HTMLElement>('.beat')];
+  const idx = [...document.querySelectorAll<HTMLElement>('.index a')];
+  const fill = document.getElementById('fill')!;
+  const hint = document.querySelector<HTMLElement>('.scroll')!;
+  let cur = 0;
+  const update = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    const p = max > 0 ? scrollY / max : 0;
+    fill.style.transform = `scaleX(${p})`;
+    hint.style.opacity = String(Math.max(0, 1 - p * 6));
+    const i = Math.min(beats.length - 1, Math.floor(p * beats.length + 0.0001));
+    if (i !== cur) { beats[cur].classList.remove('on'); idx[cur].classList.remove('on'); cur = i; beats[cur].classList.add('on'); idx[cur].classList.add('on'); }
+  };
+  addEventListener('scroll', update, { passive: true });
+  idx.forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const i = Number(a.dataset.i); const max = document.documentElement.scrollHeight - innerHeight; scrollTo({ top: (i / beats.length) * max + 2, behavior: 'smooth' }); }));
+</script>
 
 <style>
-  .hero {
-    position: relative;
-    min-height: 100svh;
-    display: grid;
-    grid-template-rows: auto 1fr;
-    overflow: hidden;
-    isolation: isolate;
-  }
-  .hero {
-    /* CSS fallback sky while the scene loads or if WebGL is unavailable */
-    background:
-      radial-gradient(60% 30% at 50% 44%, rgba(238, 240, 251, 0.16), transparent 70%),
-      radial-gradient(80% 30% at 50% 62%, rgba(243, 225, 184, 0.10), transparent 70%),
-      linear-gradient(180deg, #0a0b12 0%, #1a1c28 55%, #5b5f72 100%);
-  }
+  .track { height: 220vh; }
+  .stage { position: fixed; inset: 0; overflow: hidden; isolation: isolate; background: var(--base); }
+  .hero3d { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1400ms ease; }
+  .hero3d.is-live { opacity: 1; }
 
-  /* Title alive: a slow beam crossing the serif line, and a breathing bloom */
-  .line-2 {
-    background-image: linear-gradient(100deg,
-      var(--lavender) 0%, var(--lavender) 42%,
-      #ffffff 50%,
-      var(--lavender) 58%, var(--lavender) 100%);
-    background-size: 260% 100%;
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-    animation: title-beam 7s ease-in-out infinite, title-breathe 6s ease-in-out infinite;
-  }
-  @keyframes title-beam { 0%, 35% { background-position: 110% 0; } 65%, 100% { background-position: -10% 0; } }
-  @keyframes title-breathe {
-    0%, 100% { filter: drop-shadow(0 0 18px rgba(var(--glow), 0.25)) drop-shadow(0 0 60px rgba(var(--glow), 0.14)); }
-    50%      { filter: drop-shadow(0 0 30px rgba(var(--glow), 0.45)) drop-shadow(0 0 90px rgba(var(--glow), 0.24)); }
-  }
-  .line-1 { animation: title-breathe-soft 6s ease-in-out infinite; }
-  @keyframes title-breathe-soft {
-    0%, 100% { text-shadow: 0 0 24px rgba(var(--glow), 0.12); }
-    50%      { text-shadow: 0 0 40px rgba(var(--glow), 0.28); }
-  }
-  @media (prefers-reduced-motion: reduce) { .line-1, .line-2 { animation: none; } }
+  .hud { position: absolute; z-index: 3; }
+  .top { top: 32px; left: 44px; right: 32px; display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; }
+  .brand .label { letter-spacing: 0.22em; font-weight: 600; }
+  .brand :global(svg) { filter: drop-shadow(0 0 8px rgba(var(--glow), 0.6)); }
+  .top nav { display: flex; gap: 26px; align-items: center; color: var(--muted); }
+  .top nav a { transition: color 200ms; }
+  .top nav a:hover { color: var(--text); }
+  .top nav .bevel { margin-left: 8px; }
 
-  .nav {
-    position: relative; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 28px 64px;
-  }
-  .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; }
-  nav { display: flex; gap: 40px; font-size: 14px; color: var(--muted); }
-  nav a { transition: color 200ms; }
-  nav a:hover { color: var(--text); }
+  .index { left: 44px; top: 50%; transform: translateY(-50%); display: grid; gap: 14px; color: var(--dim); }
+  .index a { transition: color 300ms; }
+  .index a::before { opacity: 0.35; transition: opacity 300ms, box-shadow 300ms; }
+  .index a.on { color: var(--text); }
+  .index a.on::before { opacity: 1; box-shadow: 0 0 10px rgba(var(--glow), 0.8); }
 
-  .copy {
-    position: relative; z-index: 1;
-    display: grid; justify-items: center; align-content: center;
-    text-align: center;
-    padding: 0 24px 18vh;
-  }
+  .bottom { left: 15px; right: 15px; bottom: 15px; color: var(--muted); }
+  .bottom .grow { position: relative; overflow: hidden; }
+  .fill { position: absolute; inset: 0; background: rgba(var(--glow), 0.06); transform-origin: left; transform: scaleX(0); transition: transform 120ms linear; }
+  .scroll { display: inline-flex; align-items: center; gap: 10px; position: relative; }
+  .scroll i { width: 1px; height: 18px; background: linear-gradient(to bottom, transparent, var(--beam)); animation: drip 1.8s ease-in-out infinite; }
+  @keyframes drip { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+  .copy { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; text-align: center; pointer-events: none; padding-top: 40vh; }
+  .beat { grid-area: 1 / 1; opacity: 0; transform: translateY(14px); transition: opacity 700ms var(--ease), transform 900ms var(--ease); pointer-events: none; max-width: 760px; padding: 0 24px; }
+  .beat.on { opacity: 1; transform: none; pointer-events: auto; }
   h1 { display: grid; gap: 4px; }
-  .line-1 { font-size: clamp(48px, 7.2vw, 88px); }
-  .line-2 { font-size: clamp(54px, 8vw, 96px); line-height: 1; padding: 0.06em 0.12em 0.22em; margin: -0.06em -0.12em -0.22em; }
-  .lead { margin-top: 32px; font-size: 18px; max-width: 60ch; text-shadow: 0 1px 14px rgba(10, 12, 21, 0.7); }
-  .fine { margin-top: 20px; font-size: 13px; text-shadow: 0 1px 10px rgba(10, 12, 21, 0.7); }
-  .copy :global(.wrap) { text-shadow: 0 1px 14px rgba(10, 12, 21, 0.6); }
-  .copy :global(.hint) { color: var(--muted); opacity: 0.85; }
+  .line-1 { font-size: clamp(40px, 5.4vw, 66px); font-weight: 500; letter-spacing: -0.02em; text-shadow: 0 2px 30px rgba(3, 10, 24, 0.7), 0 0 30px rgba(var(--glow), 0.14); }
+  .line-2 { font-size: clamp(48px, 6.4vw, 78px); line-height: 1; padding: 0.06em 0.12em 0.22em; margin: -0.06em -0.12em -0.22em; text-shadow: 0 2px 30px rgba(3, 10, 24, 0.8), 0 0 40px rgba(var(--glow), 0.35); }
+  .lead { margin-top: 26px; font-size: 17px; max-width: 54ch; margin-inline: auto; text-shadow: 0 1px 14px rgba(3, 10, 24, 0.8); }
+  .beat :global(.wrap) { margin-top: 36px; text-shadow: 0 1px 14px rgba(3, 10, 24, 0.7); }
+  .beat .bevel { margin-top: 36px; }
+
+  @media (max-width: 800px) { .index, .bottom .dim { display: none; } .top { left: 24px; right: 24px; } }
 </style>
