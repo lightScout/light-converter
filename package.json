@@ -7,7 +7,9 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "postinstall": "node scripts/copy-ort.mjs",
+    "models": "bash scripts/get-models.sh"
   },
   "dependencies": {
     "@astrojs/svelte": "^9.0.1",
@@ -15,6 +17,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource/instrument-serif": "^5.3.0",
     "astro": "^7.3.1",
+    "onnxruntime-web": "^1.29.0",
     "svelte": "^5.57.0",
     "three": "^0.185.1"
   },

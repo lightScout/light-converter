@@ -7,6 +7,9 @@ import svelte from '@astrojs/svelte';
 export default defineConfig({
   integrations: [svelte()],
   vite: {
-    optimizeDeps: { include: ['three'] },
+    optimizeDeps: { include: ['three'], exclude: ['onnxruntime-web'] },
+    // Cross-origin isolation lets the WASM backend use threads. Mirror these in Cloudflare's _headers later.
+    server: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
+    preview: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
   },
 });

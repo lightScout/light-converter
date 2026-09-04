@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getBatch, runMock, createBatch, upsert, type Batch } from '../lib/batches';
+  import { getBatch, runLocal, createBatch, upsert, type Batch } from '../lib/batches';
+  import { onStatus, type RemoverStatus } from '../lib/remover';
 
   let batch = $state<Batch | null>(null);
   let missing = $state(false);
   let stop: (() => void) | null = null;
+  let model = $state<RemoverStatus>({ state: 'idle' });
 
   const done = $derived(batch ? batch.images.filter(i => i.state === 'done').length : 0);
   const total = $derived(batch?.images.length ?? 0);
@@ -14,7 +16,7 @@
     batch = b;
     if (b.images.some(i => i.state !== 'done')) {
       stop?.();
-      stop = runMock(b, (nb) => { batch = { ...nb }; });
+      stop = runLocal(b, (nb) => { batch = { ...nb }; });
     }
   }
 
@@ -23,6 +25,7 @@
     const b = id ? getBatch(id) : null;
     if (!b) { missing = true; return; }
     start(b);
+    const offStatus = onStatus(s => { model = s; });
 
     const drop = async (e: DragEvent) => {
       e.preventDefault();
@@ -36,7 +39,7 @@
     const over = (e: DragEvent) => e.preventDefault();
     document.addEventListener('dragover', over);
     document.addEventListener('drop', drop);
-    return () => { stop?.(); document.removeEventListener('dragover', over); document.removeEventListener('drop', drop); };
+    return () => { stop?.(); offStatus(); document.removeEventListener('dragover', over); document.removeEventListener('drop', drop); };
   });
 
   async function download() {
@@ -63,7 +66,16 @@
         <span class="display title">{batch.name}</span>
         <span class="accent count">{done} of {total}</span>
       </h1>
-      <p class="dim sub">{batch.format} · {batch.size} · {held} Light</p>
+      <p class="dim sub">
+        {batch.format} · {batch.size} · {held} Light
+        {#if model.state === 'loading'}
+          <span class="gold"> · loading model{model.total ? ` ${Math.round((model.loaded ?? 0) / model.total * 100)}%` : '…'}</span>
+        {:else if model.state === 'ready'}
+          <span> · on this device ({model.backend})</span>
+        {:else if model.state === 'error'}
+          <span class="gold"> · model failed: {model.message}</span>
+        {/if}
+      </p>
     </div>
     {#if done > 0}
       <button class="cta act" onclick={download}>Download {done === total ? 'all' : `${done} ready`}</button>
@@ -72,7 +84,7 @@
 
   <ul class="grid">
     {#each batch.images as img (img.id)}
-      <li class="tile" class:done={img.state === 'done'} class:queued={img.state === 'queued'}>
+      <li class="tile" class:done={img.state === 'done'} class:queued={img.state === 'queued'} class:failed={img.state === 'failed'}>
         {#if img.state === 'done'}
           <div class="checker result" style={`background-image:url(${img.result})`}></div>
         {:else}
@@ -104,6 +116,7 @@
     transition: box-shadow 300ms;
   }
   .tile.queued { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+  .tile.failed { box-shadow: inset 0 0 0 1px rgba(232, 199, 122, 0.35); }
   .tile.done { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10); animation: land 600ms var(--ease); }
   @keyframes land { from { opacity: 0; transform: scale(0.98); } }
 

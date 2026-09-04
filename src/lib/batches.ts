@@ -78,6 +78,37 @@ export async function createBatch(files: File[], name?: string): Promise<Batch> 
   return batch;
 }
 
+/** Local pipeline (free tier): in-browser IS-Net via the remover worker. */
+export function runLocal(batch: Batch, onChange: (b: Batch) => void) {
+  let stopped = false;
+  (async () => {
+    const { removeBackground, warmUp } = await import('./remover');
+    for (const img of batch.images) {
+      if (img.state === 'done') continue;
+      img.state = 'uploading'; img.progress = 0.08; onChange(batch);
+    }
+    try { await warmUp(); } catch (e: any) {
+      for (const img of batch.images) if (img.state !== 'done') { img.state = 'failed'; img.progress = 0; }
+      onChange(batch); upsert(batch); return;
+    }
+    for (const img of batch.images) {
+      if (stopped) return;
+      if (img.state === 'done') continue;
+      img.state = 'processing'; img.progress = 0.35; onChange(batch);
+      const tick = setInterval(() => { if (img.state === 'processing') { img.progress = Math.min(0.92, img.progress + 0.04); onChange(batch); } }, 250);
+      try {
+        img.result = await removeBackground(img.src);
+        img.state = 'done'; img.progress = 1;
+      } catch (e) {
+        console.error('[remover]', e);
+        img.state = 'failed'; img.progress = 0; img.cost = 0;
+      } finally { clearInterval(tick); }
+      onChange(batch); upsert(batch);
+    }
+  })();
+  return () => { stopped = true; };
+}
+
 /** Mock pipeline: staggered upload → process → done. Calls onChange on every tick. */
 export function runMock(batch: Batch, onChange: (b: Batch) => void, concurrency = 3) {
   let active = 0, next = 0, stopped = false;
