@@ -19,6 +19,10 @@ const FRAG = /* glsl */ `
   uniform vec2  uCenter;    // headline centre, 0..1
   uniform vec2  uMouse;     // -1..1
   uniform float uIntensity; // fade-in
+  uniform float uQuasar;    // 1 = headline quasar + god rays, 0 = ambient sky only
+  uniform float uDim;       // overall brightness
+  uniform float uHorizon;   // horizon height 0..1
+  uniform vec2  uPlanet;    // planet centre 0..1
 
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
   float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -45,7 +49,7 @@ const FRAG = /* glsl */ `
     vec3 top = vec3(0.028, 0.040, 0.120);
     vec3 mid = vec3(0.070, 0.095, 0.240);
     vec3 low = vec3(0.180, 0.220, 0.430);
-    float horizon = 0.34 + par.y * 0.6;
+    float horizon = uHorizon + par.y * 0.6;
     float h = uv.y;
     vec3 col = mix(low, mid, smoothstep(horizon - 0.10, horizon + 0.25, h));
     col = mix(col, top, smoothstep(horizon + 0.25, 1.0, h));
@@ -62,7 +66,7 @@ const FRAG = /* glsl */ `
     }
 
     // planet
-    vec2 pc = vec2(0.5 + par.x * 1.4, 0.86 + par.y * 1.2);
+    vec2 pc = uPlanet + par * vec2(1.4, 1.2);
     vec2 pd = (uv - pc) * vec2(aspect, 1.0);
     float pr = 0.13;
     float pdist = length(pd);
@@ -118,7 +122,7 @@ const FRAG = /* glsl */ `
       pow(max(0.0, cos((a + rot) * n28)), 42.0),
       pow(max(0.0, cos((a + rot - 0.006) * n28)), 42.0)) * fall;
     vec3 lav = vec3(0.874, 0.898, 1.0), peri = vec3(0.43, 0.49, 0.96);
-    col += glow * mix(peri, lav, 0.75) + rays * 0.9 + disp + core;
+    col += (glow * mix(peri, lav, 0.75) + rays * 0.9 + disp + core) * uQuasar;
 
     // god rays into the mist
     {
@@ -126,16 +130,17 @@ const FRAG = /* glsl */ `
       float ang2 = atan(d.y, d.x);
       float fan = smoothstep(-2.6, -1.6, ang2) * smoothstep(-0.5, -1.5, ang2);
       float rr = length(d * vec2(aspect, 1.0));
-      col += vec3(0.9, 0.92, 1.0) * pow(max(0.0, cos(ang2 * 22.0 + t * 0.05)), 8.0) * fan * exp(-rr * 3.0) * 0.05;
+      col += vec3(0.9, 0.92, 1.0) * pow(max(0.0, cos(ang2 * 22.0 + t * 0.05)), 8.0) * fan * exp(-rr * 3.0) * 0.05 * uQuasar;
     }
 
-    col *= 0.78;
+    col *= uDim;
     col += (hash2(uv * uRes + fract(t)) - 0.5) * 0.02;
     gl_FragColor = vec4(col * uIntensity, 1.0);
   }
 `;
 
-export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number } = {}) {
+export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number; mode?: 'hero' | 'ambient' } = {}) {
+  const ambient = opts.mode === 'ambient';
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let renderer: THREE.WebGLRenderer;
@@ -155,6 +160,10 @@ export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number 
     uCenter: { value: new THREE.Vector2(0.5, opts.centerY ?? 0.55) },
     uMouse: { value: new THREE.Vector2(0, 0) },
     uIntensity: { value: 0 },
+    uQuasar: { value: ambient ? 0 : 1 },
+    uHorizon: { value: ambient ? 0.26 : 0.34 },
+    uPlanet: { value: ambient ? new THREE.Vector2(0.82, 0.84) : new THREE.Vector2(0.5, 0.86) },
+    uDim: { value: ambient ? 0.5 : 0.78 },
   };
   const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, depthWrite: false, depthTest: false });
   scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));

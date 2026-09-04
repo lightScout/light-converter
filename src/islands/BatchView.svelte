@@ -92,8 +92,7 @@
         {:else}
           <div class="orig" style={`background-image:url(${urlFor(img.src)})`}></div>
           {#if img.state !== 'queued'}
-            <span class="bar" style={`transform:scaleX(${img.progress})`}></span>
-            <span class="pulse" aria-hidden="true"></span>
+            <span class="ring" aria-hidden="true"></span>
           {/if}
         {/if}
       </li>
@@ -115,24 +114,21 @@
     display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 32px;
   }
   .tile {
-    position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-    transition: box-shadow 300ms;
+    position: relative; aspect-ratio: 1; border-radius: 28px; overflow: hidden;
+    background: rgba(var(--glow), 0.02);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    transition: box-shadow 300ms, background 300ms;
   }
-  .tile.queued { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
-  .tile.failed { box-shadow: inset 0 0 0 1px rgba(232, 199, 122, 0.35); }
-  .tile.done { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10), 0 0 40px rgba(var(--glow), 0.05); animation: land 600ms var(--ease); }
+  .tile.queued { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+  .tile.failed { box-shadow: inset 0 0 0 1px rgba(241, 213, 155, 0.35); }
+  .tile.done { background: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10), 0 0 48px rgba(var(--glow), 0.06); animation: land 700ms var(--ease); }
   @keyframes land { from { opacity: 0; transform: scale(0.98); } }
   .reveal { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
-  .pulse {
-    position: absolute; bottom: -2px; width: 18%; height: 5px; border-radius: 3px;
-    background: radial-gradient(ellipse at center, rgba(var(--glow), 0.95), rgba(var(--glow), 0) 70%);
-    animation: pulse-travel 1600ms linear infinite;
-  }
 
   .result, .orig { position: absolute; inset: 0; background-size: contain; background-position: center; background-repeat: no-repeat; }
-  .result { background-size: contain; }
-  .orig { opacity: 0.35; background-size: cover; filter: saturate(0.6); }
+  .result { background-size: contain; opacity: 0.94; }
+  .orig { opacity: 0.16; background-size: cover; filter: saturate(0.5) blur(0.5px); }
+  .checker { background-color: rgba(244, 244, 247, 0.92); }
   .dl {
     position: absolute; left: 0; right: 0; bottom: 0;
     padding: 12px 0 14px;
@@ -142,11 +138,17 @@
     transition: opacity 180ms ease, transform 220ms var(--ease);
   }
   .tile:hover .dl, .tile:focus-within .dl { opacity: 1; transform: none; }
-  .bar {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
-    transform-origin: left;
-    background: linear-gradient(90deg, var(--gold), var(--beam));
-    box-shadow: 0 0 6px rgba(var(--glow), 0.5);
-    transition: transform 120ms linear;
+  /* One loader: a point of light travelling around the card's edge. */
+  .ring {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    padding: 1.5px;
+    background: conic-gradient(from var(--a, 0deg), transparent 0 62%, rgba(var(--glow), 0.25) 78%, rgba(var(--glow), 1) 92%, transparent 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    filter: drop-shadow(0 0 6px rgba(var(--glow), 0.7));
+    animation: orbit 2.2s linear infinite;
   }
+  @property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  @keyframes orbit { to { --a: 360deg; } }
 </style>

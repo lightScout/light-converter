@@ -2,9 +2,10 @@
 import Base from './Base.astro';
 import Star from '../components/Star.astro';
 import Spot from '../components/Spot.astro';
+import Scene from '../components/Scene.astro';
 
-interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings'; veil?: number; art?: string }
-const { title, active, veil = 0.35, art } = Astro.props;
+interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings' }
+const { title, active } = Astro.props;
 
 const items = [
   { id: 'home', label: 'Home', href: '/app' },
@@ -15,7 +16,7 @@ const items = [
 ---
 <Base title={title ? `${title} — Light Converter` : 'Light Converter'}>
   <div class="app">
-    <div class="backdrop" style={`--veil:${veil}${art ? `;--art:url(${art})` : ""}`}></div>
+    <Scene mode="ambient" />
 
     <aside class="rail" aria-label="Main">
       <a href="/app" class="brand">
@@ -56,7 +57,6 @@ const items = [
 
 <style>
   .app { position: relative; min-height: 100svh; isolation: isolate; }
-  .backdrop { z-index: -1; left: var(--rail); }
 
   .rail {
     position: fixed; inset: 0 auto 0 0;
