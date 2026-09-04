@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { getBatch, runLocal, createBatch, upsert, type Batch } from '../lib/batches';
   import { onStatus, type RemoverStatus } from '../lib/remover';
+  import { downloadBatch, downloadImage } from '../lib/download';
 
   let batch = $state<Batch | null>(null);
   let missing = $state(false);
@@ -42,15 +43,11 @@
     return () => { stop?.(); offStatus(); document.removeEventListener('dragover', over); document.removeEventListener('drop', drop); };
   });
 
+  let zipping = $state(false);
   async function download() {
-    if (!batch) return;
-    // Local mock: download each finished image. Real build streams a zip from R2.
-    for (const img of batch.images.filter(i => i.state === 'done' && i.result)) {
-      const a = document.createElement('a');
-      a.href = img.result!; a.download = img.name.replace(/\.[^.]+$/, '') + '.png';
-      a.click();
-      await new Promise(r => setTimeout(r, 150));
-    }
+    if (!batch || zipping) return;
+    zipping = true;
+    try { await downloadBatch(batch); } finally { zipping = false; }
   }
 </script>
 
@@ -78,7 +75,7 @@
       </p>
     </div>
     {#if done > 0}
-      <button class="cta act" onclick={download}>Download {done === total ? 'all' : `${done} ready`}</button>
+      <button class="cta act" onclick={download} disabled={zipping}>{zipping ? 'Zipping…' : `Download ${done === total ? 'all' : `${done} ready`}`}</button>
     {/if}
   </header>
 
@@ -87,6 +84,7 @@
       <li class="tile" class:done={img.state === 'done'} class:queued={img.state === 'queued'} class:failed={img.state === 'failed'}>
         {#if img.state === 'done'}
           <div class="checker result" style={`background-image:url(${img.result})`}></div>
+          <button class="dl" onclick={() => downloadImage(img)} aria-label={`Download ${img.name}`}>Download</button>
         {:else}
           <div class="orig" style={`background-image:url(${img.src})`}></div>
           {#if img.state !== 'queued'}
@@ -123,6 +121,15 @@
   .result, .orig { position: absolute; inset: 0; background-size: contain; background-position: center; background-repeat: no-repeat; }
   .result { background-size: contain; }
   .orig { opacity: 0.35; background-size: cover; filter: saturate(0.6); }
+  .dl {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 12px 0 14px;
+    font-size: 13px; font-weight: 500; color: var(--text);
+    background: linear-gradient(to top, rgba(10, 16, 41, 0.85), rgba(10, 16, 41, 0));
+    opacity: 0; transform: translateY(6px);
+    transition: opacity 180ms ease, transform 220ms var(--ease);
+  }
+  .tile:hover .dl, .tile:focus-within .dl { opacity: 1; transform: none; }
   .bar {
     position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
     transform-origin: left;
