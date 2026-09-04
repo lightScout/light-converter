@@ -2,8 +2,8 @@
 import Base from './Base.astro';
 import Star from '../components/Star.astro';
 
-interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings'; veil?: number }
-const { title, active, veil = 0.35 } = Astro.props;
+interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings'; veil?: number; art?: string }
+const { title, active, veil = 0.35, art } = Astro.props;
 
 const items = [
   { id: 'home', label: 'Home', href: '/app' },
@@ -14,7 +14,7 @@ const items = [
 ---
 <Base title={title ? `${title} — Light Converter` : 'Light Converter'}>
   <div class="app">
-    <div class="backdrop" style={`--veil:${veil}`}></div>
+    <div class="backdrop" style={`--veil:${veil}${art ? `;--art:url(${art})` : ""}`}></div>
 
     <aside class="rail" aria-label="Main">
       <a href="/app" class="brand">

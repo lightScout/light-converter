@@ -79,10 +79,12 @@ h1, h2, h3, p { margin: 0; }
 .cta:hover::after, .cta:focus-visible::after { left: 0; right: 0; opacity: 1; }
 .cta.is-open::after { left: 0; right: 0; }
 
-/* Backdrop image zone — swap the gradient for the real artwork later */
+/* Backdrop: artwork on top of a gradient that stands in until the file exists.
+   Set --art on the element (e.g. style="--art:url(/art/landing.webp)"). */
 .backdrop {
   position: absolute; inset: 0;
   background:
+    var(--art, none) center / cover no-repeat,
     radial-gradient(60% 40% at 50% 100%, rgba(232, 199, 122, 0.10), transparent 70%),
     linear-gradient(180deg, #0a1029 0%, #101a45 55%, #1b2554 100%);
   pointer-events: none;
