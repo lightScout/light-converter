@@ -1,0 +1,7 @@
+---
+import App from '../../layouts/App.astro';
+import BatchView from '../../islands/BatchView.svelte';
+---
+<App active="batches" title="Batch" veil={0.5}>
+  <BatchView client:load />
+</App>

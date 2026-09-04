@@ -1,0 +1,113 @@
+/* Light Converter — v0.4 tokens ("light, not matter") */
+:root {
+  --base: #0a1029;
+  --base-2: #0e1533;
+  --glass: #182042;
+  --text: #f2f4fa;
+  --muted: #a3acc8;
+  --dim: #6c7699;
+  --primary: #5b6cf0;
+  --primary-2: #7c8af6;
+  --lavender: #aeb8f7;
+  --gold: #e8c77a;
+  --success: #7fe3b0;
+
+  --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, monospace;
+
+  --rail: 72px;
+  --rail-open: 220px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--base);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+
+/* Type */
+.display {
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.0;
+}
+.accent {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--lavender);
+  letter-spacing: -0.01em;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.dim { color: var(--dim); }
+.gold { color: var(--gold); }
+
+/* Text CTA — the only kind of CTA we use */
+.cta {
+  position: relative;
+  display: inline-block;
+  font-weight: 500;
+  color: var(--text);
+  padding-bottom: 6px;
+}
+.cta::after {
+  content: '';
+  position: absolute;
+  left: 50%; right: 50%; bottom: 0;
+  height: 1px;
+  background: var(--lavender);
+  opacity: 0.7;
+  transition: left 320ms var(--ease), right 320ms var(--ease), opacity 200ms;
+}
+.cta:hover::after, .cta:focus-visible::after { left: 0; right: 0; opacity: 1; }
+.cta.is-open::after { left: 0; right: 0; }
+
+/* Backdrop image zone — swap the gradient for the real artwork later */
+.backdrop {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(60% 40% at 50% 100%, rgba(232, 199, 122, 0.10), transparent 70%),
+    linear-gradient(180deg, #0a1029 0%, #101a45 55%, #1b2554 100%);
+  pointer-events: none;
+}
+.backdrop::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--base);
+  opacity: var(--veil, 0.35);
+}
+
+/* Checkerboard for cutouts */
+.checker {
+  background-color: #e9e9e9;
+  background-image:
+    linear-gradient(45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(-45deg, #cfcfcf 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #cfcfcf 75%),
+    linear-gradient(-45deg, transparent 75%, #cfcfcf 75%);
+  background-size: 36px 36px;
+  background-position: 0 0, 0 18px, 18px -18px, -18px 0;
+}
+
+:focus-visible { outline: 1px solid var(--lavender); outline-offset: 4px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

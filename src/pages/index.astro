@@ -1,0 +1,96 @@
+---
+import Base from '../layouts/Base.astro';
+import Star from '../components/Star.astro';
+import DropZone from '../islands/DropZone.svelte';
+---
+<Base>
+  <main class="hero">
+    <div class="backdrop" style="--veil: 0.4"></div>
+    <canvas class="quasar" id="quasar" aria-hidden="true"></canvas>
+
+    <header class="nav">
+      <a href="/" class="brand"><Star size={18} color="var(--lavender)" /><span>LIGHT CONVERTER</span></a>
+      <nav>
+        <a href="/pricing">Pricing</a>
+        <a href="/app">Sign in</a>
+      </nav>
+    </header>
+
+    <section class="copy">
+      <h1>
+        <span class="display line-1">Lift the subject.</span>
+        <span class="accent line-2">Keep the light.</span>
+      </h1>
+      <p class="muted lead">Clean cutouts, one image or a hundred. Pay only for the ones that work.</p>
+      <DropZone client:load label="Drop images to try" />
+      <p class="dim fine">3 free · no account · no watermark</p>
+    </section>
+  </main>
+</Base>
+
+<script>
+  const canvas = document.getElementById('quasar') as HTMLCanvasElement | null;
+  if (canvas && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver(async ([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      const { mountQuasar } = await import('../islands/quasar');
+      mountQuasar(canvas, { centerY: 0.56 });
+      canvas.classList.add('is-live');
+    });
+    io.observe(canvas);
+  }
+</script>
+
+<style>
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .quasar {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0; transition: opacity 1200ms ease;
+  }
+  .quasar.is-live { opacity: 1; }
+  .backdrop { z-index: -1; }
+
+  /* CSS glow fallback (sits under the canvas; canvas adds on top) */
+  .copy::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 44%;
+    width: min(900px, 90vw); height: 380px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, rgba(174, 184, 247, 0.22), rgba(91, 108, 240, 0.08) 45%, transparent 75%);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .nav {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 64px;
+  }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; }
+  nav { display: flex; gap: 40px; font-size: 14px; color: var(--muted); }
+  nav a { transition: color 200ms; }
+  nav a:hover { color: var(--text); }
+
+  .copy {
+    position: relative; z-index: 1;
+    display: grid; justify-items: center; align-content: center;
+    text-align: center;
+    padding: 0 24px 12vh;
+  }
+  h1 { display: grid; gap: 4px; }
+  .line-1 { font-size: clamp(48px, 7.2vw, 88px); }
+  .line-2 { font-size: clamp(54px, 8vw, 96px); line-height: 1; text-shadow: 0 0 40px rgba(174, 184, 247, 0.35); }
+  .lead { margin-top: 32px; font-size: 18px; max-width: 60ch; }
+  .fine { margin-top: 20px; font-size: 13px; }
+</style>
