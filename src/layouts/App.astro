@@ -4,8 +4,9 @@ import Star from '../components/Star.astro';
 import Spot from '../components/Spot.astro';
 import Scene from '../components/Scene.astro';
 
-interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings' }
-const { title, active } = Astro.props;
+interface Props { title?: string; active: 'home' | 'batches' | 'light' | 'settings'; scene?: 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism' }
+const { title, active, scene } = Astro.props;
+const variant = scene ?? ({ home: 'valley', batches: 'night', light: 'aurora', settings: 'still' } as const)[active];
 
 const items = [
   { id: 'home', label: 'Home', href: '/app' },
@@ -16,7 +17,7 @@ const items = [
 ---
 <Base title={title ? `${title} — Light Converter` : 'Light Converter'}>
   <div class="app">
-    <Scene mode="ambient" />
+    <Scene mode="ambient" variant={variant} />
 
     <aside class="rail" aria-label="Main">
       <a href="/app" class="brand">

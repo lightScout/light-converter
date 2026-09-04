@@ -1,15 +1,16 @@
 ---
 /* Living background. mode="hero" adds the quasar behind the headline; "ambient" is sky + mist only. */
-interface Props { mode?: 'hero' | 'ambient'; centerY?: number; class?: string }
-const { mode = 'ambient', centerY = 0.6, class: cls = '' } = Astro.props;
+interface Props { mode?: 'hero' | 'ambient'; variant?: 'hero' | 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism'; centerY?: number; class?: string }
+const { mode = 'ambient', variant, centerY = 0.6, class: cls = '' } = Astro.props;
+const v = variant ?? (mode === 'hero' ? 'hero' : 'valley');
 ---
-<canvas class={`scene ${cls}`} data-mode={mode} data-center={centerY} aria-hidden="true"></canvas>
+<canvas class={`scene ${cls}`} data-mode={mode} data-variant={v} data-center={centerY} aria-hidden="true"></canvas>
 <script>
   const canvas = document.querySelector('canvas.scene') as HTMLCanvasElement | null;
   if (canvas) {
     const go = async () => {
       const { mountQuasar } = await import('../islands/quasar');
-      mountQuasar(canvas, { mode: (canvas.dataset.mode as 'hero' | 'ambient') || 'ambient', centerY: Number(canvas.dataset.center || 0.6) });
+      mountQuasar(canvas, { mode: (canvas.dataset.mode as 'hero' | 'ambient') || 'ambient', variant: canvas.dataset.variant as any, centerY: Number(canvas.dataset.center || 0.6) });
       canvas.classList.add('is-live');
     };
     if ('requestIdleCallback' in window) (window as any).requestIdleCallback(go, { timeout: 800 }); else setTimeout(go, 50);

@@ -23,6 +23,12 @@ const FRAG = /* glsl */ `
   uniform float uDim;       // overall brightness
   uniform float uHorizon;   // horizon height 0..1
   uniform vec2  uPlanet;    // planet centre 0..1
+  uniform float uPlanetR;   // planet radius (0 = none)
+  uniform float uMist;      // mist strength
+  uniform float uRidges;    // 0/1
+  uniform float uAurora;    // 0/1 light curtains
+  uniform float uWarm;      // horizon warmth
+  uniform float uStars;     // star density threshold (0.986 sparse … 0.97 dense)
 
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
   float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -58,7 +64,7 @@ const FRAG = /* glsl */ `
     vec2 sp = (uv + par * 0.5) * vec2(aspect, 1.0) * 220.0;
     vec2 cell = floor(sp);
     float sh = hash2(cell);
-    if (sh > 0.986 && h > horizon + 0.05) {
+    if (sh > uStars && h > horizon + 0.05) {
       vec2 f = fract(sp) - 0.5;
       float d = length(f);
       float tw = 0.55 + 0.45 * sin(t * (0.8 + hash2(cell + 7.0) * 2.0) + hash2(cell + 3.0) * 6.28);
@@ -68,19 +74,19 @@ const FRAG = /* glsl */ `
     // planet
     vec2 pc = uPlanet + par * vec2(1.4, 1.2);
     vec2 pd = (uv - pc) * vec2(aspect, 1.0);
-    float pr = 0.13;
+    float pr = uPlanetR;
     float pdist = length(pd);
     float disc = smoothstep(pr, pr - 0.004, pdist);
     float lit = smoothstep(-0.3, 0.9, -pd.y / pr) * 0.45 + 0.35;
     float tex = fbm(pd * 9.0 + 3.0) * 0.25;
     vec3 planet = vec3(0.30, 0.36, 0.62) * (lit + tex);
-    col = mix(col, planet, disc * 0.7);
+    col = mix(col, planet, disc * 0.7 * step(0.001, pr));
     col += vec3(0.55, 0.62, 0.95) * smoothstep(pr + 0.05, pr - 0.01, pdist) * (1.0 - disc) * 0.18;
 
     // horizon glow (breathing)
     float breath = 0.85 + 0.15 * sin(t * 0.35);
     float hg = exp(-abs(h - horizon) * 30.0) * 0.7 + exp(-abs(h - horizon) * 8.0) * 0.3;
-    col += vec3(0.98, 0.90, 0.72) * hg * 0.16 * breath * (0.35 + 0.65 * exp(-abs(uv.x - 0.5) * 2.2));
+    col += vec3(0.98, 0.90, 0.72) * hg * 0.16 * uWarm * breath * (0.35 + 0.65 * exp(-abs(uv.x - 0.5) * 2.2));
 
     // mist
     vec2 mp = (uv + par) * vec2(aspect, 1.0);
@@ -89,15 +95,29 @@ const FRAG = /* glsl */ `
     float below = smoothstep(horizon + 0.22, horizon - 0.35, h);
     float mist = smoothstep(0.28, 0.80, m1 * 0.7 + m2 * 0.3) * below;
     vec3 mistCol = mix(vec3(0.55, 0.60, 0.85), vec3(0.85, 0.82, 0.95), smoothstep(horizon - 0.15, horizon + 0.05, h));
-    col = mix(col, mistCol, mist * 0.7);
+    col = mix(col, mistCol, mist * 0.7 * uMist);
     float wisp = smoothstep(0.55, 0.9, fbm(mp * 3.0 + vec2(t * 0.03, 0.0) + 21.0)) * smoothstep(horizon + 0.35, horizon, h) * smoothstep(horizon - 0.1, horizon + 0.05, h);
-    col += vec3(0.7, 0.72, 0.9) * wisp * 0.12;
+    col += vec3(0.7, 0.72, 0.9) * wisp * 0.12 * uMist;
 
     // ridges
     float ridge1 = horizon - 0.18 + 0.06 * fbm(vec2(mp.x * 1.6 + 1.0, 0.0)) + 0.02 * sin(mp.x * 9.0);
     float ridge2 = horizon - 0.30 + 0.09 * fbm(vec2(mp.x * 1.1 + 5.0, 0.0));
-    col = mix(col, vec3(0.045, 0.06, 0.14), smoothstep(ridge1 + 0.01, ridge1 - 0.02, h) * 0.55);
-    col = mix(col, vec3(0.03, 0.04, 0.10), smoothstep(ridge2 + 0.01, ridge2 - 0.03, h) * 0.75);
+    col = mix(col, vec3(0.045, 0.06, 0.14), smoothstep(ridge1 + 0.01, ridge1 - 0.02, h) * 0.55 * uRidges);
+    col = mix(col, vec3(0.03, 0.04, 0.10), smoothstep(ridge2 + 0.01, ridge2 - 0.03, h) * 0.75 * uRidges);
+
+    // aurora: curtains of light hanging from the sky, slowly folding
+    if (uAurora > 0.5) {
+      float ax = uv.x * aspect;
+      float fold = fbm(vec2(ax * 1.3 + t * 0.03, t * 0.02)) * 2.0 - 1.0;
+      float band = exp(-pow((h - (0.62 + fold * 0.08)) * 6.0, 2.0));
+      float cur = fbm(vec2(ax * 5.0 - t * 0.05, h * 2.0)) ;
+      float ray = pow(smoothstep(0.35, 0.95, cur), 2.0);
+      float up = smoothstep(0.30, 0.75, h) * smoothstep(1.0, 0.7, h);
+      vec3 ac = mix(vec3(0.95, 0.86, 0.62), vec3(0.85, 0.90, 1.0), smoothstep(0.55, 0.8, h));
+      col += ac * band * ray * 0.55 * up;
+      // faint vertical streaks
+      col += vec3(0.9, 0.92, 1.0) * pow(max(0.0, sin(ax * 40.0 + fold * 6.0)), 24.0) * band * 0.10 * up;
+    }
 
     // quasar
     vec2 p = (uv - (uCenter + par * 0.4)) * vec2(aspect, 1.0);
@@ -139,8 +159,22 @@ const FRAG = /* glsl */ `
   }
 `;
 
-export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number; mode?: 'hero' | 'ambient' } = {}) {
-  const ambient = opts.mode === 'ambient';
+export type Variant = 'hero' | 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism';
+
+type Preset = { horizon: number; planet: [number, number]; planetR: number; mist: number; ridges: number; aurora: number; warm: number; stars: number; dim: number; quasar: number };
+const PRESETS: Record<Variant, Preset> = {
+  hero:     { horizon: 0.34, planet: [0.50, 0.86], planetR: 0.13, mist: 1.0, ridges: 1, aurora: 0, warm: 1.0, stars: 0.986, dim: 0.78, quasar: 1 },
+  valley:   { horizon: 0.30, planet: [0.82, 0.84], planetR: 0.11, mist: 1.0, ridges: 1, aurora: 0, warm: 1.6, stars: 0.988, dim: 0.55, quasar: 0 }, // Home: dawn in the valley
+  cloudsea: { horizon: 0.22, planet: [0.5, 0.5],   planetR: 0.0,  mist: 1.4, ridges: 0, aurora: 0, warm: 0.6, stars: 0.992, dim: 0.42, quasar: 0 }, // Batch: above a sea of cloud, very quiet
+  night:    { horizon: 0.18, planet: [0.20, 0.80], planetR: 0.07, mist: 0.5, ridges: 1, aurora: 0, warm: 0.3, stars: 0.972, dim: 0.5,  quasar: 0 }, // Batches: deep night, stars
+  aurora:   { horizon: 0.24, planet: [0.5, 0.5],   planetR: 0.0,  mist: 0.6, ridges: 1, aurora: 1, warm: 0.8, stars: 0.984, dim: 0.55, quasar: 0 }, // Light: light itself, in curtains
+  still:    { horizon: 0.20, planet: [0.5, 0.5],   planetR: 0.0,  mist: 0.3, ridges: 0, aurora: 0, warm: 0.4, stars: 0.99,  dim: 0.40, quasar: 0 }, // Settings: almost nothing
+  prism:    { horizon: 0.28, planet: [0.5, 0.88],  planetR: 0.09, mist: 0.8, ridges: 1, aurora: 1, warm: 1.2, stars: 0.986, dim: 0.6,  quasar: 0 }, // Pricing: warm, curtains + planet
+};
+
+export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number; mode?: 'hero' | 'ambient'; variant?: Variant } = {}) {
+  const variant: Variant = opts.variant ?? (opts.mode === 'ambient' ? 'valley' : 'hero');
+  const P = PRESETS[variant];
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let renderer: THREE.WebGLRenderer;
@@ -160,10 +194,16 @@ export function mountQuasar(canvas: HTMLCanvasElement, opts: { centerY?: number;
     uCenter: { value: new THREE.Vector2(0.5, opts.centerY ?? 0.55) },
     uMouse: { value: new THREE.Vector2(0, 0) },
     uIntensity: { value: 0 },
-    uQuasar: { value: ambient ? 0 : 1 },
-    uHorizon: { value: ambient ? 0.26 : 0.34 },
-    uPlanet: { value: ambient ? new THREE.Vector2(0.82, 0.84) : new THREE.Vector2(0.5, 0.86) },
-    uDim: { value: ambient ? 0.5 : 0.78 },
+    uQuasar: { value: P.quasar },
+    uHorizon: { value: P.horizon },
+    uPlanet: { value: new THREE.Vector2(P.planet[0], P.planet[1]) },
+    uPlanetR: { value: P.planetR },
+    uMist: { value: P.mist },
+    uRidges: { value: P.ridges },
+    uAurora: { value: P.aurora },
+    uWarm: { value: P.warm },
+    uStars: { value: P.stars },
+    uDim: { value: P.dim },
   };
   const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, depthWrite: false, depthTest: false });
   scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
