@@ -91,13 +91,15 @@ export function refineAlpha(rgba: Uint8ClampedArray, W: number, H: number, mask:
   const r = Math.max(3, Math.round(Math.max(W, H) / 300)); // ~7 px at 2048
   const q = guidedFilter(lum, coarse, W, H, r, 1e-3);
 
-  // Confidence gating: the guided filter may add haze in flat areas; trust the model where it is certain.
+  // Only the uncertain band gets refined. Where the model was confident (c near 0 or 1) the coarse
+  // value stands — otherwise the guided filter's local linear model punches holes into highlights
+  // on dark subjects against light backgrounds (and vice versa).
   const alpha = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const c = coarse[i];
-    let v = q[i];
-    if (c < 0.02 && v < 0.15) v = 0;
-    else if (c > 0.98 && v > 0.85) v = 1;
+    const d = Math.abs(c - 0.5);                       // 0 at the edge, 0.5 when certain
+    const w = d < 0.3 ? 1 : d > 0.45 ? 0 : (0.45 - d) / 0.15; // 1 inside band, fades to 0 by c=0.05/0.95
+    let v = c + (q[i] - c) * w;
     alpha[i] = v < 0 ? 0 : v > 1 ? 1 : v;
   }
 
@@ -116,7 +118,7 @@ export function refineAlpha(rgba: Uint8ClampedArray, W: number, H: number, mask:
     if (a > 0.02 && a < 0.98 && bgW[i] > 0.02) {
       const br = bgR[i] / bgW[i], bg = bgG[i] / bgW[i], bb = bgB[i] / bgW[i];
       // C = a·F + (1−a)·B  →  F = (C − (1−a)·B) / a
-      const k = (1 - a) / a;
+      const k = Math.min(3, (1 - a) / a);
       R = R + (R - br) * k; G = G + (G - bg) * k; B = B + (B - bb) * k;
       // pull toward the nearest opaque colour a little to avoid over-correction on very thin pixels
       if (a < 0.15) { const m = a / 0.15; R = rgba[i * 4] + (R - rgba[i * 4]) * m; G = rgba[i * 4 + 1] + (G - rgba[i * 4 + 1]) * m; B = rgba[i * 4 + 2] + (B - rgba[i * 4 + 2]) * m; }
