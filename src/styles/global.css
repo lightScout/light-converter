@@ -1,16 +1,19 @@
-/* Light Converter — v0.4 tokens ("light, not matter") */
+/* Light Converter — v0.5 tokens: light is the main character.
+   Whites lean warm-white for the subject of light, cool-white for its scatter. */
 :root {
-  --base: #0a1029;
-  --base-2: #0e1533;
-  --glass: #182042;
-  --text: #f2f4fa;
-  --muted: #a3acc8;
-  --dim: #6c7699;
-  --primary: #5b6cf0;
-  --primary-2: #7c8af6;
-  --lavender: #aeb8f7;
-  --gold: #e8c77a;
-  --success: #7fe3b0;
+  --base: #090e24;
+  --base-2: #0d1330;
+  --glass: #161d3f;
+  --text: #fbfcff;
+  --muted: #b7c0dc;
+  --dim: #7a84a8;
+  --primary: #6d7cf5;
+  --primary-2: #8d9af8;
+  --lavender: #dfe5ff;   /* scattered light: near-white with a blue cast */
+  --beam: #ffffff;
+  --gold: #f1d59b;       /* Light, the currency: warm light */
+  --success: #a8f0cc;
+  --glow: 251, 252, 255; /* rgb of white light for rgba() glows */
 
   --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
@@ -53,31 +56,74 @@ h1, h2, h3, p { margin: 0; }
   font-weight: 400;
   color: var(--lavender);
   letter-spacing: -0.01em;
+  text-shadow: 0 0 24px rgba(var(--glow), 0.35), 0 0 64px rgba(141, 154, 248, 0.25);
 }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
 .dim { color: var(--dim); }
 .gold { color: var(--gold); }
 
-/* Text CTA — the only kind of CTA we use */
+/* Text CTA — the only kind of CTA we use. On hover a beam of light sweeps through the letters
+   (a specular glint with a faint prismatic edge) and the underline opens from the centre. */
 .cta {
   position: relative;
   display: inline-block;
   font-weight: 500;
   color: var(--text);
   padding-bottom: 6px;
+  background-image: linear-gradient(100deg,
+    var(--text) 0%, var(--text) 40%,
+    #ffd9c2 46%, #ffffff 50%, #c8e2ff 54%,
+    var(--text) 60%, var(--text) 100%);
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  transition: text-shadow 300ms;
 }
+.cta:hover, .cta:focus-visible { animation: glint 900ms var(--ease) forwards; text-shadow: 0 0 18px rgba(var(--glow), 0.35); }
+@keyframes glint { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 .cta::after {
   content: '';
   position: absolute;
   left: 50%; right: 50%; bottom: 0;
   height: 1px;
-  background: var(--lavender);
-  opacity: 0.7;
+  background: linear-gradient(90deg, transparent, var(--beam), transparent);
+  opacity: 0.8;
+  box-shadow: 0 0 8px rgba(var(--glow), 0.5);
   transition: left 320ms var(--ease), right 320ms var(--ease), opacity 200ms;
 }
 .cta:hover::after, .cta:focus-visible::after { left: 0; right: 0; opacity: 1; }
 .cta.is-open::after { left: 0; right: 0; }
+.cta:disabled { animation: none; }
+
+/* Pointer light: a soft spot of light that follows the cursor over the page surface. */
+.spot {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(var(--glow), 0.07), rgba(141, 154, 248, 0.03) 40%, transparent 70%);
+  opacity: 0; transition: opacity 600ms;
+}
+.spot.on { opacity: 1; }
+
+/* Light reveal: when a cutout lands, light expands from its centre and a beam sweeps the surface. */
+@keyframes reveal-flash { 0% { opacity: 0.9; transform: scale(0.2); } 100% { opacity: 0; transform: scale(2.2); } }
+@keyframes reveal-sweep { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(220%) skewX(-18deg); } }
+.reveal::before, .reveal::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+.reveal::before {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--glow), 0.9), rgba(var(--glow), 0) 60%);
+  animation: reveal-flash 900ms var(--ease) forwards;
+}
+.reveal::after {
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(var(--glow), 0.55), transparent);
+  animation: reveal-sweep 1100ms 120ms var(--ease) forwards;
+  transform: translateX(-120%) skewX(-18deg);
+}
+
+/* Light pulse travelling along a hairline. */
+@keyframes pulse-travel { from { left: -20%; } to { left: 110%; } }
+
 
 /* Backdrop: artwork on top of a gradient that stands in until the file exists.
    Set --art on the element (e.g. style="--art:url(/art/landing.webp)"). */
@@ -111,5 +157,7 @@ h1, h2, h3, p { margin: 0; }
 :focus-visible { outline: 1px solid var(--lavender); outline-offset: 4px; border-radius: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
+  .spot { display: none; }
+  .reveal::before, .reveal::after { display: none; }
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }

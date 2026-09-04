@@ -45,12 +45,24 @@ const FRAG = /* glsl */ `
       rays += beam * flick * exp(-r * 2.6) * (i == 0 ? 0.20 : 0.12);
     }
 
-    vec3 lavender = vec3(0.682, 0.722, 0.969);
+    vec3 lavender = vec3(0.874, 0.898, 1.0);
     vec3 peri     = vec3(0.357, 0.424, 0.941);
     vec3 white    = vec3(1.0);
 
-    vec3 col = glow * mix(peri, lavender, 0.6) + rays * lavender + core * white;
-    float alpha = clamp(glow * 0.9 + rays + core, 0.0, 1.0) * uIntensity;
+    // dispersion: the ray field sampled at three slightly different angles → R/G/B split at the edges
+    float rot2 = uTime * 0.018;
+    float rr = 0.0, gg = 0.0, bb = 0.0;
+    {
+      float n = 28.0;
+      float aR = a + rot2 + 0.006, aG = a + rot2, aB = a + rot2 - 0.006;
+      float fall = exp(-r * 2.6) * 0.10;
+      rr = pow(max(0.0, cos(aR * n)), 42.0) * fall;
+      gg = pow(max(0.0, cos(aG * n)), 42.0) * fall;
+      bb = pow(max(0.0, cos(aB * n)), 42.0) * fall;
+    }
+    vec3 disp = vec3(rr, gg, bb);
+    vec3 col = glow * mix(peri, lavender, 0.75) + rays * white * 0.9 + disp + core * white;
+    float alpha = clamp(glow * 0.9 + rays + core + max(rr, max(gg, bb)), 0.0, 1.0) * uIntensity;
 
     gl_FragColor = vec4(col, alpha);
   }

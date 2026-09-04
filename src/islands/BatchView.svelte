@@ -87,11 +87,13 @@
       <li class="tile" class:done={img.state === 'done'} class:queued={img.state === 'queued'} class:failed={img.state === 'failed'}>
         {#if img.state === 'done'}
           <div class="checker result" style={`background-image:url(${urlFor(img.result)})`}></div>
+          <div class="reveal" aria-hidden="true"></div>
           <button class="dl" onclick={() => downloadImage(img)} aria-label={`Download ${img.name}`}>Download</button>
         {:else}
           <div class="orig" style={`background-image:url(${urlFor(img.src)})`}></div>
           {#if img.state !== 'queued'}
             <span class="bar" style={`transform:scaleX(${img.progress})`}></span>
+            <span class="pulse" aria-hidden="true"></span>
           {/if}
         {/if}
       </li>
@@ -103,7 +105,8 @@
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; }
   h1 { display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; }
   .title { font-size: 40px; font-weight: 300; letter-spacing: -0.02em; }
-  .count { font-size: 34px; }
+  .count { font-size: 34px; transition: text-shadow 300ms; }
+  .head:has(.tile) .count { }
   .sub { margin-top: 10px; font-size: 13px; }
   .act { font-size: 16px; margin-top: 14px; white-space: nowrap; }
 
@@ -118,8 +121,14 @@
   }
   .tile.queued { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
   .tile.failed { box-shadow: inset 0 0 0 1px rgba(232, 199, 122, 0.35); }
-  .tile.done { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10); animation: land 600ms var(--ease); }
+  .tile.done { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10), 0 0 40px rgba(var(--glow), 0.05); animation: land 600ms var(--ease); }
   @keyframes land { from { opacity: 0; transform: scale(0.98); } }
+  .reveal { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
+  .pulse {
+    position: absolute; bottom: -2px; width: 18%; height: 5px; border-radius: 3px;
+    background: radial-gradient(ellipse at center, rgba(var(--glow), 0.95), rgba(var(--glow), 0) 70%);
+    animation: pulse-travel 1600ms linear infinite;
+  }
 
   .result, .orig { position: absolute; inset: 0; background-size: contain; background-position: center; background-repeat: no-repeat; }
   .result { background-size: contain; }
@@ -136,7 +145,8 @@
   .bar {
     position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
     transform-origin: left;
-    background: linear-gradient(90deg, var(--gold), var(--lavender));
+    background: linear-gradient(90deg, var(--gold), var(--beam));
+    box-shadow: 0 0 6px rgba(var(--glow), 0.5);
     transition: transform 120ms linear;
   }
 </style>

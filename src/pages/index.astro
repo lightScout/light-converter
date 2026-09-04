@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import Star from '../components/Star.astro';
 import DropZone from '../islands/DropZone.svelte';
+import Spot from '../components/Spot.astro';
 ---
 <Base>
   <main class="hero">
@@ -25,6 +26,7 @@ import DropZone from '../islands/DropZone.svelte';
       <DropZone client:load label="Drop images to try" />
       <p class="dim fine">3 free · no account · no watermark</p>
     </section>
+    <Spot />
   </main>
 </Base>
 
@@ -90,7 +92,8 @@ import DropZone from '../islands/DropZone.svelte';
   }
   h1 { display: grid; gap: 4px; }
   .line-1 { font-size: clamp(48px, 7.2vw, 88px); }
-  .line-2 { font-size: clamp(54px, 8vw, 96px); line-height: 1; text-shadow: 0 0 40px rgba(174, 184, 247, 0.35); }
+  .line-2 { font-size: clamp(54px, 8vw, 96px); line-height: 1; }
+  .line-1 { text-shadow: 0 0 30px rgba(var(--glow), 0.18); }
   .lead { margin-top: 32px; font-size: 18px; max-width: 60ch; }
   .fine { margin-top: 20px; font-size: 13px; }
 </style>
