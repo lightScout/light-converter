@@ -171,7 +171,16 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   piece.add(pieceShell, ...pieceExact, ...pieceEdges);
   piece.scale.setScalar(0.34);
   const pieceGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), additive(GLOW_FRAG, { uAlpha: { value: 0.18 }, uCol: { value: new THREE.Color(0.55, 0.75, 1.0) } }));
-  const innerGlow = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.4), additive(GLOW_FRAG, { uAlpha: { value: 0.3 }, uCol: { value: new THREE.Color(0.55, 0.75, 1.0) } }));
+  // the cavity it was cut from: the same shape, same size as the piece, hollowed out of the subject's centre
+  const cavity = new THREE.Group();
+  const cavEdgeMat = () => new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+  const cavEdges = [edgesA, edgesB, edgesC].map(e => new THREE.LineSegments(e.geometry, cavEdgeMat()));
+  const cavShell = new THREE.Mesh(glassGeo, shell.material); cavShell.frustumCulled = false;
+  const cavExact = exact.map(m => new THREE.Mesh(m.geometry, m.material));
+  cavity.add(cavShell, ...cavExact, ...cavEdges);
+  cavity.scale.setScalar(0.34);
+  body.add(cavity);
+  const innerGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), additive(GLOW_FRAG, { uAlpha: { value: 0.5 }, uCol: { value: new THREE.Color(0.7, 0.85, 1.0) } }));
 
   prism.add(body, innerGlow, piece, pieceGlow);
   prism.position.set(0, 1.35, 0);
@@ -269,11 +278,14 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
     (edgesA.material as THREE.LineBasicMaterial).opacity = 0.55 * (1 - smooth(0.0, 0.5, m1));
     (edgesB.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m1) * (1 - smooth(0.0, 0.5, m2));
     (edgesC.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m2);
+    (cavEdges[0].material as THREE.LineBasicMaterial).opacity = 0.9 * (1 - smooth(0.0, 0.5, m1));
+    (cavEdges[1].material as THREE.LineBasicMaterial).opacity = 0.9 * smooth(0.5, 1.0, m1) * (1 - smooth(0.0, 0.5, m2));
+    (cavEdges[2].material as THREE.LineBasicMaterial).opacity = 0.9 * smooth(0.5, 1.0, m2);
     body.rotation.set(m1 * 0.3 + m2 * 0.2, m1 * 0.8 + m2 * 1.2 + t * 0.12 * m1, m1 * 0.15);
     // the extracted piece drifts beside the subject, lifting a little higher with each beat, tumbling slowly
     const lift = 1 + p * 0.6;
     piece.position.set(2.5 + Math.sin(t * 0.37) * 0.15, (0.9 + Math.sin(t * 0.5 + 1.2) * 0.12) * lift, 0.9 + Math.cos(t * 0.3) * 0.2);
-    piece.rotation.set(body.rotation.x + t * 0.18, body.rotation.y - t * 0.25, body.rotation.z + 0.4);
+    piece.rotation.set(body.rotation.x + Math.sin(t * 0.3) * 0.25, body.rotation.y + Math.sin(t * 0.22) * 0.35 + 0.3, body.rotation.z + Math.sin(t * 0.26) * 0.2);
     pieceGlow.position.copy(piece.position); pieceGlow.lookAt(camera.position);
     lightWorld.set(-4, 5, 4); prism.localToWorld(lightWorld);
     glassU.uLight.value.copy(lightWorld); glassU.uCam.value.copy(camera.position); glassU.uTime.value = t;
