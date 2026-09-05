@@ -1,11 +1,10 @@
 /**
- * Landing hero — a glass prism floating in a dark blue void.
- *   • triangular prism: fresnel glass shell, bright edges, specular from the beam
- *   • a piece of the shape floats extracted beside it — lift the subject
- *   • haze behind it, a pool of light below it, dust motes with depth
- *   • light ribbons flow past as you scroll (beats 2–3)
- *   • Lenis smooth scroll; scroll progress scrubs the tilt and the camera
- * Palette: white light, electric blue scatter, deep navy dark. No terrain — nothing but light.
+ * Landing hero — a photo with its subject cut out, and the cut-out floating beside it.
+ *   • the card: a translucent plane in the void with a subject-shaped hole; the hole shows the faint checker of transparency
+ *   • the piece: the same silhouette, lit, lifted out and drifting beside the card
+ *   • haze behind, a pool of light below, dust motes with depth, light ribbons flowing past
+ *   • Lenis smooth scroll with snap; scroll lifts the piece further and turns the card
+ * Palette: white light, electric blue scatter, deep navy dark.
  */
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -20,36 +19,100 @@ const UV_VERT = /* glsl */ `
   varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
 `;
 
-/** Glass: fresnel rim + a specular from the light, additive so it reads as light on dark. */
-const GLASS_VERT = /* glsl */ `
-  attribute vec3 aPosB; attribute vec3 aPosC; attribute vec3 aNormB; attribute vec3 aNormC;
+/** Shared 2D field: the card outline and the subject silhouette, in card space (x −1…1, y −1.25…1.25). */
+const FIELD = /* glsl */ `
+  float sdBox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+  float smin(float a, float b, float k){ float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
+  // three subjects, morphed by blending their distance fields: a bust, a bottle, a plant
+  float subjectA(vec2 p){
+    float head = length((p - vec2(0.02, 0.40)) * vec2(1.0, 0.90)) - 0.27;
+    float neck = sdBox(p - vec2(0.02, 0.06), vec2(0.12, 0.24), 0.08);
+    float body = sdBox(p - vec2(0.0, -0.66), vec2(0.66, 0.40), 0.30);
+    return smin(smin(head, neck, 0.10), body, 0.16);
+  }
+  float subjectB(vec2 p){
+    float cap = sdBox(p - vec2(0.0, 0.80), vec2(0.13, 0.08), 0.03);
+    float neck = sdBox(p - vec2(0.0, 0.50), vec2(0.11, 0.26), 0.05);
+    float body = sdBox(p - vec2(0.0, -0.30), vec2(0.34, 0.60), 0.16);
+    return smin(smin(cap, neck, 0.04), body, 0.22);
+  }
+  float leaf(vec2 p, vec2 c, float ang, float len){
+    vec2 q = p - c; float cs = cos(ang), sn = sin(ang); q = vec2(cs * q.x - sn * q.y, sn * q.x + cs * q.y);
+    return length(q * vec2(1.0, 2.6)) - len;
+  }
+  float subjectC(vec2 p){
+    float pot = sdBox(p - vec2(0.0, -0.62), vec2(0.30, 0.30), 0.06);
+    float stem = sdBox(p - vec2(0.0, -0.05), vec2(0.035, 0.40), 0.03);
+    float l1 = leaf(p, vec2(-0.30, 0.20), 0.75, 0.30);
+    float l2 = leaf(p, vec2(0.32, 0.30), -0.70, 0.32);
+    float l3 = leaf(p, vec2(0.0, 0.62), 0.0, 0.26);
+    float l4 = leaf(p, vec2(-0.22, 0.52), 1.15, 0.22);
+    return smin(smin(smin(smin(smin(pot, stem, 0.04), l1, 0.05), l2, 0.05), l3, 0.05), l4, 0.05);
+  }
   uniform float uM1; uniform float uM2;
-  varying vec3 vN; varying vec3 vW;
+  float subject(vec2 p){ return mix(mix(subjectA(p), subjectB(p), uM1), subjectC(p), uM2); }
+  float card(vec2 p){ return sdBox(p, vec2(1.0, 1.25), 0.10); }
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+`;
+const CARD_VERT = /* glsl */ `
+  varying vec2 vP; varying vec3 vW; varying vec3 vN;
+  void main(){ vP = (uv - 0.5) * vec2(2.0, 2.5); vN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position,1.0); vW = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }
+`;
+/** The card: translucent photo-like surface with the subject cut out. */
+const CARD_FRAG = /* glsl */ `
+  uniform float uTime; uniform vec3 uCam; uniform float uOpen;
+  varying vec2 vP; varying vec3 vW; varying vec3 vN;
+  ${FIELD}
   void main(){
-    vec3 p = mix(mix(position, aPosB, uM1), aPosC, uM2);
-    vec3 n = normalize(mix(mix(normal, aNormB, uM1), aNormC, uM2));
-    vN = normalize(mat3(modelMatrix) * n); vec4 wp = modelMatrix * vec4(p,1.0); vW = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp;
+    float dc = card(vP);
+    if (dc > 0.0) discard;
+    float ds = subject(vP);
+    vec3 V = normalize(uCam - vW); vec3 N = normalize(vN); if (dot(N, V) < 0.0) N = -N;
+    float fres = pow(1.0 - max(dot(N, V), 0.0), 2.0);
+    // the "photo": soft light gradients so it reads as an image, not a slab
+    float g1 = smoothstep(-1.4, 1.4, vP.y * 0.7 + vP.x * 0.35);
+    float blob = exp(-length(vP - vec2(-0.55, 0.6)) * 1.6) * 0.35 + exp(-length(vP - vec2(0.7, -0.9)) * 1.3) * 0.25;
+    vec3 photo = mix(vec3(0.08, 0.16, 0.34), vec3(0.30, 0.46, 0.78), g1) + vec3(0.45, 0.62, 1.0) * blob;
+    photo += (hash(floor(vP * 90.0)) - 0.5) * 0.05;                 // grain
+    float sheen = pow(0.5 + 0.5 * sin((vP.x * 0.9 + vP.y * 0.6) * 2.2 - uTime * 0.45), 16.0) * 0.22;
+    vec3 col = photo * 0.36 + vec3(0.55, 0.72, 1.0) * (fres * 0.22 + sheen);
+    float a = 0.8;
+    // border: a thin bright edge
+    float edge = smoothstep(0.03, 0.0, abs(dc + 0.015));
+    col += vec3(0.75, 0.86, 1.0) * edge * 0.45;
+    // the hole: transparent — a faint checker, and a lit rim where the cut was made
+    float hole = 1.0 - smoothstep(0.0, 0.012, ds);
+    vec2 ck = floor(vP * 10.0); float checker = mod(ck.x + ck.y, 2.0);
+    vec3 holeCol = vec3(0.10, 0.16, 0.30) * (0.45 + checker * 0.35);
+    float rim = smoothstep(0.05, 0.0, abs(ds)) * uOpen;
+    col = mix(col, holeCol, hole * uOpen);
+    a = mix(a, 0.22, hole * uOpen);
+    col += vec3(0.65, 0.82, 1.0) * rim * 0.8;
+    gl_FragColor = vec4(col, a);
   }
 `;
-const GLASS_FRAG = /* glsl */ `
-  uniform vec3 uCam; uniform vec3 uLight; uniform float uTime; uniform float uOpacity;
-  varying vec3 vN; varying vec3 vW;
+/** The piece: the subject itself, lit from within, nothing outside the silhouette. */
+const PIECE_FRAG = /* glsl */ `
+  uniform float uTime; uniform vec3 uCam; uniform float uOpen;
+  varying vec2 vP; varying vec3 vW; varying vec3 vN;
+  ${FIELD}
   void main(){
-    // flat facets from screen-space derivatives: crisp faces even mid-morph
-    vec3 N = normalize(cross(dFdx(vW), dFdy(vW)));
-    vec3 V = normalize(uCam - vW);
-    if (dot(N, V) < 0.0) N = -N;
-    float f = pow(1.0 - max(dot(N, V), 0.0), 2.6);
-    vec3 L = normalize(uLight - vW); vec3 H = normalize(L + V);
-    float spec = pow(max(dot(N, H), 0.0), 160.0);
-    // slow sheen sweeping across the faces
-    float sheen = pow(0.5 + 0.5 * sin(dot(vW, vec3(0.9, 1.4, 0.3)) * 1.2 - uTime * 0.5), 14.0) * 0.12;
-    vec3 tint = mix(vec3(0.22, 0.42, 0.85), vec3(0.85, 0.92, 1.0), f);
-    vec3 col = tint * (0.035 + f * 0.55 + sheen) + vec3(1.0) * spec * 0.3;
-    gl_FragColor = vec4(col * uOpacity, 1.0);
+    float ds = subject(vP);
+    if (ds > 0.02) discard;
+    float inside = 1.0 - smoothstep(0.0, 0.012, ds);
+    float g1 = smoothstep(-1.4, 1.4, vP.y * 0.7 + vP.x * 0.35);
+    float blob = exp(-length(vP - vec2(-0.55, 0.6)) * 1.6) * 0.35 + exp(-length(vP - vec2(0.7, -0.9)) * 1.3) * 0.25;
+    vec3 photo = mix(vec3(0.08, 0.16, 0.34), vec3(0.30, 0.46, 0.78), g1) + vec3(0.45, 0.62, 1.0) * blob;
+    photo += (hash(floor(vP * 90.0)) - 0.5) * 0.05;
+    // lifted: the subject carries the light — brighter, cooler, a soft inner glow
+    float core = exp(-length(vP - vec2(0.0, 0.1)) * 1.1);
+    float sheen = pow(0.5 + 0.5 * sin((vP.x * 0.9 + vP.y * 0.6) * 2.2 - uTime * 0.45 + 1.0), 16.0) * 0.3;
+    vec3 col = photo * 0.55 + vec3(0.7, 0.84, 1.0) * (core * 0.26 + sheen);
+    float rim = smoothstep(0.05, 0.0, abs(ds));
+    col += vec3(0.85, 0.92, 1.0) * rim * 0.55;
+    gl_FragColor = vec4(col, inside * uOpen);
   }
 `;
-
 /** Soft radial light (haze, pool, glints). */
 const GLOW_FRAG = /* glsl */ `
   uniform float uAlpha; uniform vec3 uCol; varying vec2 vUv;
@@ -87,32 +150,6 @@ const RIBBON_FRAG = /* glsl */ `
 const additive = (fragmentShader: string, uniforms: Record<string, THREE.IUniform>) =>
   new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader, uniforms, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
 
-/** Project every vertex of a base sphere onto a convex polyhedron given as planes (n·x = d). */
-type Plane = { n: THREE.Vector3; d: number };
-function projectOnto(base: THREE.BufferGeometry, planes: Plane[]) {
-  const src = base.getAttribute('position') as THREE.BufferAttribute;
-  const pos = new Float32Array(src.count * 3), nor = new Float32Array(src.count * 3);
-  const dir = new THREE.Vector3();
-  for (let i = 0; i < src.count; i++) {
-    dir.fromBufferAttribute(src, i).normalize();
-    let best = Infinity, bn = planes[0].n;
-    for (const pl of planes) { const c = pl.n.dot(dir); if (c > 1e-6) { const s = pl.d / c; if (s < best) { best = s; bn = pl.n; } } }
-    pos[i*3] = dir.x * best; pos[i*3+1] = dir.y * best; pos[i*3+2] = dir.z * best;
-    nor[i*3] = bn.x; nor[i*3+1] = bn.y; nor[i*3+2] = bn.z;
-  }
-  return { pos, nor };
-}
-function facePlanes(geo: THREE.BufferGeometry): Plane[] {
-  const g = geo.index ? geo.toNonIndexed() : geo; const p = g.getAttribute('position');
-  const out: Plane[] = []; const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
-  for (let i = 0; i < p.count; i += 3) {
-    a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
-    n.subVectors(b, a).cross(c.clone().sub(a)).normalize();
-    out.push({ n: n.clone(), d: n.dot(a) });
-  }
-  return out;
-}
-
 export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElement } = {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let renderer: THREE.WebGLRenderer;
@@ -130,61 +167,17 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   camera.position.copy(camBase);
   camera.lookAt(0, 0.9, 0);
 
-  // --- prism ---
-  const R = 1.35, LEN = 3.2;                       // triangle circumradius, prism length
-  const prism = new THREE.Group();                 // world placement (float, tilt, scroll)
-  const body = new THREE.Group();                  // the glass, triangle in XY, axis along z, apex up
-  const glassU = { uCam: { value: camera.position.clone() }, uLight: { value: new THREE.Vector3() }, uTime: { value: 0 } };
-  // three convex shapes share one vertex set (a projected sphere), so the shader can morph between them
-  const OCT = 2.0, ICO = 1.75;
-  const prismPlanes: Plane[] = [30, 150, 270].map(deg => ({ n: new THREE.Vector3(Math.cos(deg * Math.PI / 180), Math.sin(deg * Math.PI / 180), 0), d: R / 2 }))
-    .concat([{ n: new THREE.Vector3(0, 0, 1), d: LEN / 2 }, { n: new THREE.Vector3(0, 0, -1), d: LEN / 2 }]);
-  const octaGeo = new THREE.OctahedronGeometry(OCT), icoGeo = new THREE.IcosahedronGeometry(ICO);
-  const base = new THREE.IcosahedronGeometry(1, 48).toNonIndexed(); // detail = edge segments: 20·49² triangles
-  const A = projectOnto(base, prismPlanes), B = projectOnto(base, facePlanes(octaGeo)), C = projectOnto(base, facePlanes(icoGeo));
-  const glassGeo = new THREE.BufferGeometry();
-  glassGeo.setAttribute('position', new THREE.BufferAttribute(A.pos, 3)); glassGeo.setAttribute('normal', new THREE.BufferAttribute(A.nor, 3));
-  glassGeo.setAttribute('aPosB', new THREE.BufferAttribute(B.pos, 3)); glassGeo.setAttribute('aNormB', new THREE.BufferAttribute(B.nor, 3));
-  glassGeo.setAttribute('aPosC', new THREE.BufferAttribute(C.pos, 3)); glassGeo.setAttribute('aNormC', new THREE.BufferAttribute(C.nor, 3));
-  glassGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3);
-  const morphU = { uM1: { value: 0 }, uM2: { value: 0 } };
-  const glassMat = (extra: Record<string, THREE.IUniform>) => new THREE.ShaderMaterial({ vertexShader: GLASS_VERT, fragmentShader: GLASS_FRAG, uniforms: { ...glassU, ...extra }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-  const shellOp = { value: 0 }, exactOp = [{ value: 1 }, { value: 0 }, { value: 0 }];
-  const shell = new THREE.Mesh(glassGeo, glassMat({ ...morphU, uOpacity: shellOp }));
-  shell.frustumCulled = false;
-
-  const edgeMat = () => new THREE.LineBasicMaterial({ color: 0xe6eeff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
-  const prismEdgeGeo = new THREE.CylinderGeometry(R, R, LEN, 3, 1, false); prismEdgeGeo.rotateX(-Math.PI / 2);
-  const edgesA = new THREE.LineSegments(new THREE.EdgesGeometry(prismEdgeGeo, 10), edgeMat());
-  const edgesB = new THREE.LineSegments(new THREE.EdgesGeometry(octaGeo, 10), edgeMat());
-  const edgesC = new THREE.LineSegments(new THREE.EdgesGeometry(icoGeo, 10), edgeMat());
-  // exact meshes carry the resting states (crisp faces); the shell only carries the transitions, crossfading either side
-  const prismExact = new THREE.CylinderGeometry(R, R, LEN, 3, 1, false); prismExact.rotateX(-Math.PI / 2);
-  const exact = [prismExact, octaGeo, icoGeo].map((g, i) => new THREE.Mesh(g.toNonIndexed(), glassMat({ uM1: { value: 0 }, uM2: { value: 0 }, uOpacity: exactOp[i] })));
-  body.add(shell, ...exact, edgesA, edgesB, edgesC);
-
-  // "lift the subject": a piece of the shape, extracted and floating beside it — same shape, same morph, smaller
-  const piece = new THREE.Group();
-  const pieceShell = new THREE.Mesh(glassGeo, shell.material); pieceShell.frustumCulled = false;
-  const pieceExact = exact.map(m => new THREE.Mesh(m.geometry, m.material));
-  const pieceEdges = [edgesA, edgesB, edgesC].map(e => new THREE.LineSegments(e.geometry, e.material));
-  piece.add(pieceShell, ...pieceExact, ...pieceEdges);
-  piece.scale.setScalar(0.34);
-  const pieceGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), additive(GLOW_FRAG, { uAlpha: { value: 0.18 }, uCol: { value: new THREE.Color(0.55, 0.75, 1.0) } }));
-  // the cavity it was cut from: the same shape, same size as the piece, hollowed out of the subject's centre
-  const cavity = new THREE.Group();
-  const cavEdgeMat = () => new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-  const cavEdges = [edgesA, edgesB, edgesC].map(e => new THREE.LineSegments(e.geometry, cavEdgeMat()));
-  const cavShell = new THREE.Mesh(glassGeo, shell.material); cavShell.frustumCulled = false;
-  const cavExact = exact.map(m => new THREE.Mesh(m.geometry, m.material));
-  cavity.add(cavShell, ...cavExact, ...cavEdges);
-  cavity.scale.setScalar(0.34);
-  body.add(cavity);
-  const innerGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), additive(GLOW_FRAG, { uAlpha: { value: 0.5 }, uCol: { value: new THREE.Color(0.7, 0.85, 1.0) } }));
-
-  prism.add(body, innerGlow, piece, pieceGlow);
-  prism.position.set(0, 1.35, 0);
-  scene.add(prism);
+  // --- the card and the piece ---
+  const CW = 2.4, CH = 3.0;
+  const cardU = { uTime: { value: 0 }, uCam: { value: camera.position.clone() }, uOpen: { value: 1 }, uM1: { value: 0 }, uM2: { value: 0 } };
+  const plane = new THREE.PlaneGeometry(CW, CH);
+  const card = new THREE.Mesh(plane, new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms: cardU, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  const piece = new THREE.Mesh(plane, new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: PIECE_FRAG, uniforms: cardU, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  const pieceGlow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 4.0), additive(GLOW_FRAG, { uAlpha: { value: 0.2 }, uCol: { value: new THREE.Color(0.45, 0.68, 1.0) } }));
+  const rig = new THREE.Group();          // the whole composition floats and tilts together
+  rig.add(card, piece, pieceGlow);
+  rig.position.set(-0.35, 2.35, 0);
+  scene.add(rig);
 
   // --- void dressing: haze behind, a pool of light below ---
   const haze = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), additive(GLOW_FRAG, { uAlpha: { value: 0.22 }, uCol: { value: new THREE.Color(0.18, 0.40, 0.95) } }));
@@ -221,7 +214,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   // --- post ---
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.6, 0.55);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.6, 0.6);
   composer.addPass(bloom);
 
   const resize = () => {
@@ -248,8 +241,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   if (!reduced) addEventListener('pointermove', onMove, { passive: true });
   const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-  const lightWorld = new THREE.Vector3();
-  let mS1 = 0, mS2 = 0, last = 0;
+  let mS1 = 0, mA = 0, mB = 0, last = 0;
   let raf = 0, running = true; const start = performance.now();
   const frame = (now: number) => {
     if (!running) return;
@@ -258,37 +250,20 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
     mouse.lerp(target, 0.05);
     const p = progress;
 
-    // float + a slow tilt; scroll turns it a little further and lifts it.
-    prism.position.y = 1.35 + Math.sin(t * 0.5) * 0.12 + p * 0.9;
-    prism.rotation.set(
-      0.10 + Math.sin(t * 0.22) * 0.06 + p * 0.35 + mouse.y * 0.05,
-      0.42 + Math.sin(t * 0.16) * 0.12 + p * 0.35 + mouse.x * 0.08,
-      -0.05 + Math.sin(t * 0.19) * 0.04 - p * 0.12,
-    );
-    // prism → octahedron → icosahedron across the journey; edges crossfade with the shapes
-    // morph windows sit between the anchors (0 → ½ → 1) and are damped over time so a flick of the wheel never snaps the shape
-    const t1 = smooth(0.10, 0.42, p), t2 = smooth(0.58, 0.90, p);
+    // the composition floats; scroll turns it and lifts the piece further out of the card
+    rig.position.y = 2.3 + Math.sin(t * 0.5) * 0.06 + p * 0.05;
+    rig.rotation.set(0.04 + Math.sin(t * 0.22) * 0.03 + mouse.y * 0.05, -0.32 + Math.sin(t * 0.16) * 0.05 + p * 0.55 + mouse.x * 0.08, 0.02 + Math.sin(t * 0.19) * 0.02);
     const dt = Math.min(0.1, last ? (now - last) / 1000 : 0.016); last = now;
     const k = 1 - Math.exp(-dt * 5.5);
-    mS1 += (t1 - mS1) * k; mS2 += (t2 - mS2) * k;
-    const m1 = mS1, m2 = mS2;
-    morphU.uM1.value = m1; morphU.uM2.value = m2;
-    const rest0 = 1 - smooth(0.0, 0.14, m1), rest1 = smooth(0.86, 1.0, m1) * (1 - smooth(0.0, 0.14, m2)), rest2 = smooth(0.86, 1.0, m2);
-    exactOp[0].value = rest0; exactOp[1].value = rest1; exactOp[2].value = rest2; shellOp.value = 1 - Math.max(rest0, rest1, rest2);
-    (edgesA.material as THREE.LineBasicMaterial).opacity = 0.55 * (1 - smooth(0.0, 0.5, m1));
-    (edgesB.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m1) * (1 - smooth(0.0, 0.5, m2));
-    (edgesC.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m2);
-    (cavEdges[0].material as THREE.LineBasicMaterial).opacity = 0.9 * (1 - smooth(0.0, 0.5, m1));
-    (cavEdges[1].material as THREE.LineBasicMaterial).opacity = 0.9 * smooth(0.5, 1.0, m1) * (1 - smooth(0.0, 0.5, m2));
-    (cavEdges[2].material as THREE.LineBasicMaterial).opacity = 0.9 * smooth(0.5, 1.0, m2);
-    body.rotation.set(m1 * 0.3 + m2 * 0.2, m1 * 0.8 + m2 * 1.2 + t * 0.12 * m1, m1 * 0.15);
-    // the extracted piece drifts beside the subject, lifting a little higher with each beat, tumbling slowly
-    const lift = 1 + p * 0.6;
-    piece.position.set(2.5 + Math.sin(t * 0.37) * 0.15, (0.9 + Math.sin(t * 0.5 + 1.2) * 0.12) * lift, 0.9 + Math.cos(t * 0.3) * 0.2);
-    piece.rotation.set(body.rotation.x + Math.sin(t * 0.3) * 0.25, body.rotation.y + Math.sin(t * 0.22) * 0.35 + 0.3, body.rotation.z + Math.sin(t * 0.26) * 0.2);
-    pieceGlow.position.copy(piece.position); pieceGlow.lookAt(camera.position);
-    lightWorld.set(-4, 5, 4); prism.localToWorld(lightWorld);
-    glassU.uLight.value.copy(lightWorld); glassU.uCam.value.copy(camera.position); glassU.uTime.value = t;
+    mS1 += (p - mS1) * k;
+    // subject morphs between the anchors (0 → ½ → 1), damped: bust → bottle → plant
+    mA += (smooth(0.10, 0.42, p) - mA) * k; mB += (smooth(0.58, 0.90, p) - mB) * k;
+    cardU.uM1.value = mA; cardU.uM2.value = mB;
+    const lift = 0.35 + mS1 * 1.1;              // how far the piece has come out
+    piece.position.set(0.7 + lift * 1.1 + Math.sin(t * 0.37) * 0.05, 0.1 + lift * 0.12 + Math.sin(t * 0.5 + 1.2) * 0.05, 0.4 + lift * 0.7 + Math.cos(t * 0.3) * 0.04);
+    piece.rotation.set(Math.sin(t * 0.3) * 0.04 - lift * 0.05, 0.08 + lift * 0.12 + Math.sin(t * 0.22) * 0.04, -0.03 + Math.sin(t * 0.26) * 0.03);
+    pieceGlow.position.copy(piece.position).add(new THREE.Vector3(0, 0, -0.05)); pieceGlow.rotation.copy(piece.rotation);
+    cardU.uTime.value = t; cardU.uCam.value.copy(camera.position);
 
     ribbonAlpha.value = 0.55 + 0.45 * smooth(0.0, 0.5, p) - 0.3 * smooth(0.8, 1, p);
 
