@@ -1,7 +1,29 @@
 ---
 import App from '../../layouts/App.astro';
+const rows = [
+  { n: '01', k: 'Output', v: 'PNG' },
+  { n: '02', k: 'Size', v: 'Standard · up to 2048px' },
+  { n: '03', k: 'Engine', v: 'On this device · WebGPU' },
+  { n: '04', k: 'Quality', v: 'Refined edges' },
+];
 ---
-<App active="settings" title="Settings">
-  <h1 class="display" style="font-size:40px">Settings</h1>
-  <p class="dim" style="margin-top:12px">Coming with the Stripe phase.</p>
+<App active="settings" title="Settings" status="Settings apply to new batches">
+  <span class="label sq dim" data-scramble>Defaults</span>
+  <dl class="spec">
+    {rows.map(r => (
+      <div class="row">
+        <dt class="label dim">{r.k}</dt>
+        <dd>{r.v}</dd>
+        <span class="label dim n">{r.n}</span>
+      </div>
+    ))}
+  </dl>
 </App>
+
+<style>
+  .spec { margin: 18px 0 0; max-width: 640px; }
+  .row { display: grid; grid-template-columns: 140px 1fr 40px; align-items: baseline; gap: 24px; padding: 18px 8px; border-top: 1px solid rgba(var(--glow), 0.10); }
+  .row:last-child { border-bottom: 1px solid rgba(var(--glow), 0.10); }
+  dd { margin: 0; font-size: 16px; }
+  .n { text-align: right; }
+</style>

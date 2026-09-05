@@ -1,7 +1,39 @@
 ---
 import App from '../../layouts/App.astro';
+const packs = [
+  { n: '01', name: '100 Light', note: 'one-off' },
+  { n: '02', name: '500 Light', note: 'one-off' },
+  { n: '03', name: '2 000 Light', note: 'one-off' },
+  { n: '04', name: 'Unlimited', note: 'monthly · server cutouts · priority' },
+];
 ---
-<App active="light" title="Light">
-  <h1 class="display" style="font-size:40px">Light</h1>
-  <p class="dim" style="margin-top:12px">Coming with the Stripe phase.</p>
+<App active="light" title="Light" status="One Light is one clean cutout">
+  <span class="label sq dim" data-scramble>Balance</span>
+  <h1><span class="display big">128</span> <span class="accent unit">Light</span></h1>
+  <p class="dim">15 free every month · failed images release their Light</p>
+
+  <span class="label sq dim packs-label" data-scramble>Packs</span>
+  <ul class="rows">
+    {packs.map(p => (
+      <li class="row">
+        <span class="name">{p.name}</span>
+        <span class="label dim">{p.note}</span>
+        <button class="bevel" type="button"><i class="glyph"></i>Get</button>
+        <span class="label dim n">{p.n}</span>
+      </li>
+    ))}
+  </ul>
 </App>
+
+<style>
+  h1 { display: flex; align-items: baseline; gap: 16px; margin-top: 10px; }
+  .big { font-size: 72px; font-weight: 300; letter-spacing: -0.03em; }
+  .unit { font-size: 40px; color: var(--gold); }
+  p { margin-top: 10px; }
+  .packs-label { display: block; margin-top: 64px; }
+  .rows { list-style: none; margin: 14px 0 0; padding: 0; max-width: 640px; }
+  .row { display: grid; grid-template-columns: 1fr auto auto 40px; align-items: center; gap: 24px; padding: 16px 8px; border-top: 1px solid rgba(var(--glow), 0.10); }
+  .row:last-child { border-bottom: 1px solid rgba(var(--glow), 0.10); }
+  .name { font-size: 16px; font-weight: 500; }
+  .n { text-align: right; }
+</style>

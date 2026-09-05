@@ -1,29 +1,21 @@
 ---
-/* Living background. mode="hero" adds the quasar behind the headline; "ambient" is sky + mist only. */
-interface Props { mode?: 'hero' | 'ambient'; variant?: 'hero' | 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism'; centerY?: number; class?: string }
-const { mode = 'ambient', variant, centerY = 0.6, class: cls = '' } = Astro.props;
-const v = variant ?? (mode === 'hero' ? 'hero' : 'valley');
+/* Living background for the app: the same void as the landing — haze, motes, light ribbons — and on some pages the cut-out card at the side. */
+interface Props { mode?: 'hero' | 'ambient'; variant?: 'hero' | 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism'; class?: string }
+const { variant = 'valley', class: cls = '' } = Astro.props;
 ---
-<canvas class={`scene ${cls}`} data-mode={mode} data-variant={v} data-center={centerY} aria-hidden="true"></canvas>
+<canvas class={`scene ${cls}`} data-variant={variant} aria-hidden="true"></canvas>
 <script>
   const canvas = document.querySelector('canvas.scene') as HTMLCanvasElement | null;
   if (canvas) {
     const go = async () => {
-      const { mountQuasar } = await import('../islands/quasar');
-      mountQuasar(canvas, { mode: (canvas.dataset.mode as 'hero' | 'ambient') || 'ambient', variant: canvas.dataset.variant as any, centerY: Number(canvas.dataset.center || 0.6) });
+      const { mountHero } = await import('../islands/hero3d');
+      mountHero(canvas, { ambient: true, variant: canvas.dataset.variant as any });
       canvas.classList.add('is-live');
     };
     if ('requestIdleCallback' in window) (window as any).requestIdleCallback(go, { timeout: 800 }); else setTimeout(go, 50);
   }
 </script>
 <style>
-  .scene {
-    position: fixed; inset: 0; width: 100%; height: 100%;
-    z-index: -1; pointer-events: none;
-    opacity: 0; transition: opacity 1600ms ease;
-    background:
-      radial-gradient(80% 30% at 50% 70%, rgba(243, 225, 184, 0.08), transparent 70%),
-      linear-gradient(180deg, #0a0b12 0%, #171923 60%, #3a3d4c 100%);
-  }
+  .scene { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1600ms ease; background: var(--base); }
   .scene.is-live { opacity: 1; }
 </style>

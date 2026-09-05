@@ -150,7 +150,22 @@ const RIBBON_FRAG = /* glsl */ `
 const additive = (fragmentShader: string, uniforms: Record<string, THREE.IUniform>) =>
   new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader, uniforms, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
 
-export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElement } = {}) {
+export type HeroVariant = 'hero' | 'valley' | 'cloudsea' | 'night' | 'aurora' | 'still' | 'prism';
+export interface HeroOptions { scrollEl?: HTMLElement; ambient?: boolean; variant?: HeroVariant }
+/** Per-page dressing for ambient mode: which cut-out (if any) sits at the side, how strong the ribbons are. */
+const VARIANTS: Record<HeroVariant, { card: boolean; m1: number; m2: number; ribbons: number; haze: number; motes: number }> = {
+  hero:     { card: true,  m1: 0, m2: 0, ribbons: 1.0, haze: 0.22, motes: 1.0 },
+  valley:   { card: true,  m1: 0, m2: 0, ribbons: 0.7, haze: 0.20, motes: 1.0 },   // app home
+  cloudsea: { card: false, m1: 0, m2: 0, ribbons: 0.35, haze: 0.14, motes: 0.6 },  // batch workspace: quiet
+  night:    { card: false, m1: 1, m2: 0, ribbons: 0.5, haze: 0.16, motes: 0.8 },   // batches list
+  aurora:   { card: true,  m1: 1, m2: 1, ribbons: 1.0, haze: 0.24, motes: 1.0 },   // light
+  still:    { card: false, m1: 0, m2: 0, ribbons: 0.3, haze: 0.12, motes: 0.5 },   // settings
+  prism:    { card: true,  m1: 1, m2: 0, ribbons: 0.8, haze: 0.22, motes: 1.0 },   // pricing
+};
+
+export function mountHero(canvas: HTMLCanvasElement, opts: HeroOptions = {}) {
+  const ambient = !!opts.ambient;
+  const V = VARIANTS[opts.variant ?? 'hero'];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let renderer: THREE.WebGLRenderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
@@ -177,11 +192,12 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   const rig = new THREE.Group();          // the whole composition floats and tilts together
   rig.add(card, piece, pieceGlow);
   rig.position.set(-0.35, 2.35, 0);
+  if (ambient) { rig.position.set(4.1, 1.4, -1.8); rig.scale.setScalar(0.8); rig.visible = V.card; }
   scene.add(rig);
 
   // --- void dressing: haze behind, a pool of light below ---
-  const haze = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), additive(GLOW_FRAG, { uAlpha: { value: 0.22 }, uCol: { value: new THREE.Color(0.18, 0.40, 0.95) } }));
-  haze.position.set(0.5, 1.2, -4);
+  const haze = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), additive(GLOW_FRAG, { uAlpha: { value: V.haze }, uCol: { value: new THREE.Color(0.18, 0.40, 0.95) } }));
+  haze.position.set(ambient ? 2.5 : 0.5, 1.2, -4);
   scene.add(haze);
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), additive(GLOW_FRAG, { uAlpha: { value: 0.16 }, uCol: { value: new THREE.Color(0.25, 0.5, 1.0) } }));
   pool.position.set(0, -2.6, -1);
@@ -204,7 +220,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   scene.add(ribbons);
 
   // --- motes ---
-  const COUNT = 500;
+  const COUNT = Math.round(500 * V.motes);
   const pos = new Float32Array(COUNT * 3), seed = new Float32Array(COUNT);
   for (let i = 0; i < COUNT; i++) { pos[i*3] = (Math.random()*2-1)*14; pos[i*3+1] = (Math.random()*2-1)*7; pos[i*3+2] = (Math.random()*2-1)*10 - 2; seed[i] = Math.random(); }
   const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); mg.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
@@ -226,7 +242,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   const ro = new ResizeObserver(resize); ro.observe(canvas);
 
   // --- scroll (Lenis) + pointer ---
-  const lenis = reduced ? null : new Lenis({ lerp: 0.08, smoothWheel: true });
+  const lenis = reduced || ambient ? null : new Lenis({ lerp: 0.08, smoothWheel: true });
   // the three beats are anchors at 0 / ½ / 1 of the journey; each shape is fully formed there, and the scroll settles onto them
   const snap = lenis ? new Snap(lenis, { type: 'proximity', duration: 1.1 }) : null;
   let unsnap: (() => void)[] = [];
@@ -234,8 +250,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   let progress = 0;
   const scrollEl = opts.scrollEl ?? document.documentElement;
   const readScroll = () => { const max = scrollEl.scrollHeight - innerHeight; progress = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0; };
-  addEventListener('scroll', readScroll, { passive: true }); readScroll();
-  setSnaps(); addEventListener('resize', setSnaps);
+  if (!ambient) { addEventListener('scroll', readScroll, { passive: true }); readScroll(); setSnaps(); addEventListener('resize', setSnaps); }
   const mouse = new THREE.Vector2(), target = new THREE.Vector2();
   const onMove = (e: PointerEvent) => target.set((e.clientX/innerWidth)*2-1, -((e.clientY/innerHeight)*2-1));
   if (!reduced) addEventListener('pointermove', onMove, { passive: true });
@@ -248,16 +263,16 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
     const t = reduced ? 0 : (now - start) / 1000;
     lenis?.raf(now);
     mouse.lerp(target, 0.05);
-    const p = progress;
+    const p = ambient ? 0 : progress;
 
     // the composition floats; scroll turns it and lifts the piece further out of the card
-    rig.position.y = 2.3 + Math.sin(t * 0.5) * 0.06 + p * 0.05;
-    rig.rotation.set(0.04 + Math.sin(t * 0.22) * 0.03 + mouse.y * 0.05, -0.32 + Math.sin(t * 0.16) * 0.05 + p * 0.55 + mouse.x * 0.08, 0.02 + Math.sin(t * 0.19) * 0.02);
+    rig.position.y = (ambient ? 1.4 : 2.3) + Math.sin(t * 0.5) * 0.06 + p * 0.05;
+    rig.rotation.set(0.04 + Math.sin(t * 0.22) * 0.03 + mouse.y * 0.05, (ambient ? -0.55 : -0.32) + Math.sin(t * 0.16) * 0.05 + p * 0.55 + mouse.x * 0.08, 0.02 + Math.sin(t * 0.19) * 0.02);
     const dt = Math.min(0.1, last ? (now - last) / 1000 : 0.016); last = now;
     const k = 1 - Math.exp(-dt * 5.5);
     mS1 += (p - mS1) * k;
     // subject morphs between the anchors (0 → ½ → 1), damped: bust → bottle → plant
-    mA += (smooth(0.10, 0.42, p) - mA) * k; mB += (smooth(0.58, 0.90, p) - mB) * k;
+    mA += ((ambient ? V.m1 : smooth(0.10, 0.42, p)) - mA) * k; mB += ((ambient ? V.m2 : smooth(0.58, 0.90, p)) - mB) * k;
     cardU.uM1.value = mA; cardU.uM2.value = mB;
     const lift = 0.35 + mS1 * 1.1;              // how far the piece has come out
     piece.position.set(0.7 + lift * 1.1 + Math.sin(t * 0.37) * 0.05, 0.1 + lift * 0.12 + Math.sin(t * 0.5 + 1.2) * 0.05, 0.4 + lift * 0.7 + Math.cos(t * 0.3) * 0.04);
@@ -265,7 +280,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
     pieceGlow.position.copy(piece.position).add(new THREE.Vector3(0, 0, -0.05)); pieceGlow.rotation.copy(piece.rotation);
     cardU.uTime.value = t; cardU.uCam.value.copy(camera.position);
 
-    ribbonAlpha.value = 0.55 + 0.45 * smooth(0.0, 0.5, p) - 0.3 * smooth(0.8, 1, p);
+    ribbonAlpha.value = ambient ? V.ribbons * 0.7 : 0.55 + 0.45 * smooth(0.0, 0.5, p) - 0.3 * smooth(0.8, 1, p);
 
     camera.position.set(camBase.x + mouse.x * 0.5, camBase.y + mouse.y * 0.3 + p * 0.5, camBase.z - p * 1.0);
     camera.lookAt(0, 0.9 + p * 0.5, 0);

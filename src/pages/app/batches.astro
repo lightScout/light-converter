@@ -3,6 +3,7 @@ import App from '../../layouts/App.astro';
 import Recent from '../../islands/Recent.svelte';
 ---
 <App active="batches" title="Batches">
-  <h1 class="display" style="font-size:40px">Batches</h1>
+  <span class="label sq dim" data-scramble>All batches</span>
+  <h1 class="display" style="font-size:40px;margin-top:10px">Batches</h1>
   <Recent client:load mode="rows" />
 </App>
