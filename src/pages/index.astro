@@ -70,11 +70,11 @@ const beats = [
     const p = max > 0 ? scrollY / max : 0;
     fill.style.transform = `scaleX(${p})`;
     hint.style.opacity = String(Math.max(0, 1 - p * 6));
-    const i = Math.min(beats.length - 1, Math.floor(p * beats.length + 0.0001));
+    const i = Math.min(beats.length - 1, Math.round(p * (beats.length - 1)));
     if (i !== cur) { beats[cur].classList.remove('on'); idx[cur].classList.remove('on'); cur = i; beats[cur].classList.add('on'); idx[cur].classList.add('on'); }
   };
   addEventListener('scroll', update, { passive: true });
-  idx.forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const i = Number(a.dataset.i); const max = document.documentElement.scrollHeight - innerHeight; scrollTo({ top: (i / beats.length) * max + 2, behavior: 'smooth' }); }));
+  idx.forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const i = Number(a.dataset.i); const max = document.documentElement.scrollHeight - innerHeight; scrollTo({ top: Math.round((i / (beats.length - 1)) * max), behavior: 'smooth' }); }));
 </script>
 
 <style>

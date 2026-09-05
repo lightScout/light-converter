@@ -12,6 +12,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import Lenis from 'lenis';
+import Snap from 'lenis/snap';
 
 const NAVY = 0x030a18;
 
@@ -186,14 +187,15 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   const shellOp = { value: 0 }, exactOp = [{ value: 1 }, { value: 0 }, { value: 0 }];
   const shell = new THREE.Mesh(glassGeo, glassMat({ ...morphU, uOpacity: shellOp }));
   shell.frustumCulled = false;
-  // exact meshes for the three resting states (the projected shell only carries the transitions)
-  const prismExact = new THREE.CylinderGeometry(R, R, LEN, 3, 1, false); prismExact.rotateX(-Math.PI / 2);
-  const exact = [prismExact, octaGeo, icoGeo].map((g, i) => new THREE.Mesh(g.toNonIndexed(), glassMat({ uM1: { value: 0 }, uM2: { value: 0 }, uOpacity: exactOp[i] })));
+
   const edgeMat = () => new THREE.LineBasicMaterial({ color: 0xe6eeff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
   const prismEdgeGeo = new THREE.CylinderGeometry(R, R, LEN, 3, 1, false); prismEdgeGeo.rotateX(-Math.PI / 2);
   const edgesA = new THREE.LineSegments(new THREE.EdgesGeometry(prismEdgeGeo, 10), edgeMat());
   const edgesB = new THREE.LineSegments(new THREE.EdgesGeometry(octaGeo, 10), edgeMat());
   const edgesC = new THREE.LineSegments(new THREE.EdgesGeometry(icoGeo, 10), edgeMat());
+  // exact meshes carry the resting states (crisp faces); the shell only carries the transitions, crossfading either side
+  const prismExact = new THREE.CylinderGeometry(R, R, LEN, 3, 1, false); prismExact.rotateX(-Math.PI / 2);
+  const exact = [prismExact, octaGeo, icoGeo].map((g, i) => new THREE.Mesh(g.toNonIndexed(), glassMat({ uM1: { value: 0 }, uM2: { value: 0 }, uOpacity: exactOp[i] })));
   body.add(shell, ...exact, edgesA, edgesB, edgesC);
 
   // the light path — computed on the triangle (apex (0,R), base at y=-R/2, half-width R·sin60)
@@ -277,16 +279,22 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
 
   // --- scroll (Lenis) + pointer ---
   const lenis = reduced ? null : new Lenis({ lerp: 0.08, smoothWheel: true });
+  // the three beats are anchors at 0 / ½ / 1 of the journey; each shape is fully formed there, and the scroll settles onto them
+  const snap = lenis ? new Snap(lenis, { type: 'proximity', duration: 1.1 }) : null;
+  let unsnap: (() => void)[] = [];
+  const setSnaps = () => { unsnap.forEach(f => f()); unsnap = []; if (!snap) return; const max = scrollEl.scrollHeight - innerHeight; unsnap = [0, 0.5, 1].map(f => snap.add(Math.round(max * f))); };
   let progress = 0;
   const scrollEl = opts.scrollEl ?? document.documentElement;
   const readScroll = () => { const max = scrollEl.scrollHeight - innerHeight; progress = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0; };
   addEventListener('scroll', readScroll, { passive: true }); readScroll();
+  setSnaps(); addEventListener('resize', setSnaps);
   const mouse = new THREE.Vector2(), target = new THREE.Vector2();
   const onMove = (e: PointerEvent) => target.set((e.clientX/innerWidth)*2-1, -((e.clientY/innerHeight)*2-1));
   if (!reduced) addEventListener('pointermove', onMove, { passive: true });
   const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   const lightWorld = new THREE.Vector3();
+  let mS1 = 0, mS2 = 0, last = 0;
   let raf = 0, running = true; const start = performance.now();
   const frame = (now: number) => {
     if (!running) return;
@@ -303,21 +311,26 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
       -0.05 + Math.sin(t * 0.19) * 0.04 - p * 0.12,
     );
     // prism → octahedron → icosahedron across the journey; edges crossfade with the shapes
-    const m1 = smooth(0.2, 0.45, p), m2 = smooth(0.55, 0.82, p);
+    // morph windows sit between the anchors (0 → ½ → 1) and are damped over time so a flick of the wheel never snaps the shape
+    const t1 = smooth(0.10, 0.42, p), t2 = smooth(0.58, 0.90, p);
+    const dt = Math.min(0.1, last ? (now - last) / 1000 : 0.016); last = now;
+    const k = 1 - Math.exp(-dt * 5.5);
+    mS1 += (t1 - mS1) * k; mS2 += (t2 - mS2) * k;
+    const m1 = mS1, m2 = mS2;
     morphU.uM1.value = m1; morphU.uM2.value = m2;
-    const rest0 = 1 - smooth(0.0, 0.04, m1), rest1 = smooth(0.96, 1.0, m1) * (1 - smooth(0.0, 0.04, m2)), rest2 = smooth(0.96, 1.0, m2);
+    const rest0 = 1 - smooth(0.0, 0.14, m1), rest1 = smooth(0.86, 1.0, m1) * (1 - smooth(0.0, 0.14, m2)), rest2 = smooth(0.86, 1.0, m2);
     exactOp[0].value = rest0; exactOp[1].value = rest1; exactOp[2].value = rest2; shellOp.value = 1 - Math.max(rest0, rest1, rest2);
-    (edgesA.material as THREE.LineBasicMaterial).opacity = 0.55 * (1 - smooth(0.2, 0.3, p));
-    (edgesB.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.38, 0.45, p) * (1 - smooth(0.55, 0.64, p));
-    (edgesC.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.74, 0.82, p);
+    (edgesA.material as THREE.LineBasicMaterial).opacity = 0.55 * (1 - smooth(0.0, 0.5, m1));
+    (edgesB.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m1) * (1 - smooth(0.0, 0.5, m2));
+    (edgesC.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m2);
     body.rotation.set(m1 * 0.3 + m2 * 0.2, m1 * 0.8 + m2 * 1.2 + t * 0.12 * m1, m1 * 0.15);
-    const beamOn = 1 - smooth(0.12, 0.28, p);
+    const beamOn = 1 - smooth(0.04, 0.16, p);
     beamU.uAlpha.value = 0.9 * beamOn; innerU.uAlpha.value = 0.8 * beamOn; glintU.uAlpha.value = 0.55 * beamOn;
     rayU.forEach((u, i) => { u.uAlpha.value = (0.62 + 0.1 * Math.sin(t * 1.1 + i)) * beamOn; });
     lightWorld.set(entry.x, entry.y, 0.4); prism.localToWorld(lightWorld);
     glassU.uLight.value.copy(lightWorld); glassU.uCam.value.copy(camera.position); glassU.uTime.value = t;
 
-    ribbonAlpha.value = smooth(0.15, 0.5, p) * (1 - 0.3 * smooth(0.8, 1, p));
+    ribbonAlpha.value = smooth(0.2, 0.5, p) * (1 - 0.3 * smooth(0.8, 1, p));
 
     camera.position.set(camBase.x + mouse.x * 0.5, camBase.y + mouse.y * 0.3 + p * 0.5, camBase.z - p * 1.0);
     camera.lookAt(0, 0.9 + p * 0.5, 0);
@@ -332,7 +345,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   document.addEventListener('visibilitychange', onVis);
 
   return () => {
-    running = false; cancelAnimationFrame(raf); ro.disconnect(); lenis?.destroy();
+    running = false; cancelAnimationFrame(raf); ro.disconnect(); snap?.destroy(); lenis?.destroy(); removeEventListener('resize', setSnaps);
     removeEventListener('scroll', readScroll); removeEventListener('pointermove', onMove); document.removeEventListener('visibilitychange', onVis);
     composer.dispose(); renderer.dispose();
   };
