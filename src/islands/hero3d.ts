@@ -1,7 +1,7 @@
 /**
  * Landing hero — a glass prism floating in a dark blue void.
  *   • triangular prism: fresnel glass shell, bright edges, specular from the beam
- *   • a white beam enters the left face, bends inside, and leaves the right face as a soft spectral fan
+ *   • a piece of the shape floats extracted beside it — lift the subject
  *   • haze behind it, a pool of light below it, dust motes with depth
  *   • light ribbons flow past as you scroll (beats 2–3)
  *   • Lenis smooth scroll; scroll progress scrubs the tilt and the camera
@@ -45,37 +45,11 @@ const GLASS_FRAG = /* glsl */ `
     // slow sheen sweeping across the faces
     float sheen = pow(0.5 + 0.5 * sin(dot(vW, vec3(0.9, 1.4, 0.3)) * 1.2 - uTime * 0.5), 14.0) * 0.12;
     vec3 tint = mix(vec3(0.22, 0.42, 0.85), vec3(0.85, 0.92, 1.0), f);
-    vec3 col = tint * (0.035 + f * 0.55 + sheen) + vec3(1.0) * spec * 0.9;
+    vec3 col = tint * (0.035 + f * 0.55 + sheen) + vec3(1.0) * spec * 0.3;
     gl_FragColor = vec4(col * uOpacity, 1.0);
   }
 `;
 
-/** A segment of light: soft across, fades in along, tinted. */
-const SEG_FRAG = /* glsl */ `
-  uniform float uAlpha; uniform vec3 uCol; uniform float uFadeIn; uniform float uFadeOut; varying vec2 vUv;
-  void main(){
-    float across = smoothstep(0.5, 0.0, abs(vUv.y - 0.5));
-    across = across * across;
-    float along = smoothstep(0.0, uFadeIn, vUv.x) * smoothstep(1.0, 1.0 - uFadeOut, vUv.x);
-    float a = across * along * uAlpha;
-    gl_FragColor = vec4(uCol * a, a);
-  }
-`;
-/** The fan leaving the prism: mostly white light with a spectral fringe, spreading and thinning. */
-const FAN_FRAG = /* glsl */ `
-  uniform float uAlpha; varying vec2 vUv;
-  vec3 hue(float h){ vec3 c = clamp(abs(mod(h*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0,0.0,1.0); return c*c*(3.0-2.0*c); }
-  void main(){
-    float u = vUv.x, v = vUv.y;
-    float spread = mix(0.06, 0.5, u);               // half-width grows along the fan
-    float d = abs(v - 0.5) / spread;                // 0 centre .. 1 edge
-    float body = smoothstep(1.0, 0.0, d);
-    vec3 spectral = hue(0.72 - (v - 0.5 + spread) / (2.0 * spread) * 0.72);
-    vec3 col = mix(vec3(0.92, 0.96, 1.0), spectral, smoothstep(0.1, 0.7, u) * 0.55);
-    float a = body * body * (1.0 - u) * (1.0 - u) * uAlpha * 0.8;
-    gl_FragColor = vec4(col * a, a);
-  }
-`;
 /** Soft radial light (haze, pool, glints). */
 const GLOW_FRAG = /* glsl */ `
   uniform float uAlpha; uniform vec3 uCol; varying vec2 vUv;
@@ -139,15 +113,6 @@ function facePlanes(geo: THREE.BufferGeometry): Plane[] {
   return out;
 }
 
-/** A light segment from a to b (in the XY plane of its parent), with a given width. */
-function segment(a: THREE.Vector2, b: THREE.Vector2, width: number, mat: THREE.Material) {
-  const len = a.distanceTo(b);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(len, width), mat);
-  m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, 0);
-  m.rotation.z = Math.atan2(b.y - a.y, b.x - a.x);
-  return m;
-}
-
 export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElement } = {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let renderer: THREE.WebGLRenderer;
@@ -198,36 +163,17 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
   const exact = [prismExact, octaGeo, icoGeo].map((g, i) => new THREE.Mesh(g.toNonIndexed(), glassMat({ uM1: { value: 0 }, uM2: { value: 0 }, uOpacity: exactOp[i] })));
   body.add(shell, ...exact, edgesA, edgesB, edgesC);
 
-  // the light path — computed on the triangle (apex (0,R), base at y=-R/2, half-width R·sin60)
-  const hw = R * 0.8660;                           // R·sin(60°)
-  const leftAt = (y: number) => -hw * (R - y) / (1.5 * R);
-  const rightAt = (y: number) => hw * (R - y) / (1.5 * R);
-  const entry = new THREE.Vector2(leftAt(0.32), 0.32);
-  const exit = new THREE.Vector2(rightAt(-0.05), -0.05);
-  const from = new THREE.Vector2(-7.5, 1.25);
-  const light = new THREE.Group();                 // beam + internal path + fan, in the prism's plane
-  const beamU = { uAlpha: { value: 1 }, uCol: { value: new THREE.Color(0.95, 0.97, 1.0) }, uFadeIn: { value: 0.6 }, uFadeOut: { value: 0.02 } };
-  const innerU = { uAlpha: { value: 1 }, uCol: { value: new THREE.Color(0.75, 0.88, 1.0) }, uFadeIn: { value: 0.05 }, uFadeOut: { value: 0.05 } };
-  light.add(segment(from, entry, 0.13, additive(SEG_FRAG, beamU)));
-  light.add(segment(entry, exit, 0.34, additive(SEG_FRAG, innerU)));
-  // dispersion: six rays leave the exit at slightly different angles, violet bent most, red least
-  const rays: THREE.Mesh[] = [];
-  const rayU: { uAlpha: THREE.IUniform }[] = [];
-  const spectrum = [[0.62, 0.45, 1.0], [0.45, 0.60, 1.0], [0.55, 0.85, 1.0], [0.70, 1.0, 0.75], [1.0, 0.92, 0.55], [1.0, 0.65, 0.55]];
-  spectrum.forEach((c, i) => {
-    const ang = -0.52 + i * 0.045;
-    const u = { uAlpha: { value: 0.5 }, uCol: { value: new THREE.Color(c[0], c[1], c[2]) }, uFadeIn: { value: 0.03 }, uFadeOut: { value: 0.92 } };
-    const end = new THREE.Vector2(exit.x + Math.cos(ang) * 7.5, exit.y + Math.sin(ang) * 7.5);
-    const m = segment(exit, end, 0.20, additive(SEG_FRAG, u));
-    rays.push(m); rayU.push(u); light.add(m);
-  });
-  const glintU = { uAlpha: { value: 0.9 }, uCol: { value: new THREE.Color(0.9, 0.95, 1.0) } };
-  for (const pt of [entry, exit]) { const g = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), additive(GLOW_FRAG, glintU)); g.position.set(pt.x, pt.y, 0.02); light.add(g); }
-  const innerGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.0), additive(GLOW_FRAG, { uAlpha: { value: 0.35 }, uCol: { value: new THREE.Color(0.55, 0.75, 1.0) } }));
-  innerGlow.position.set(0, 0.1, 0);
-  light.add(innerGlow);
+  // "lift the subject": a piece of the shape, extracted and floating beside it — same shape, same morph, smaller
+  const piece = new THREE.Group();
+  const pieceShell = new THREE.Mesh(glassGeo, shell.material); pieceShell.frustumCulled = false;
+  const pieceExact = exact.map(m => new THREE.Mesh(m.geometry, m.material));
+  const pieceEdges = [edgesA, edgesB, edgesC].map(e => new THREE.LineSegments(e.geometry, e.material));
+  piece.add(pieceShell, ...pieceExact, ...pieceEdges);
+  piece.scale.setScalar(0.34);
+  const pieceGlow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), additive(GLOW_FRAG, { uAlpha: { value: 0.18 }, uCol: { value: new THREE.Color(0.55, 0.75, 1.0) } }));
+  const innerGlow = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.4), additive(GLOW_FRAG, { uAlpha: { value: 0.3 }, uCol: { value: new THREE.Color(0.55, 0.75, 1.0) } }));
 
-  prism.add(body, light);
+  prism.add(body, innerGlow, piece, pieceGlow);
   prism.position.set(0, 1.35, 0);
   scene.add(prism);
 
@@ -303,7 +249,7 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
     mouse.lerp(target, 0.05);
     const p = progress;
 
-    // float + a slow tilt; scroll turns it a little further and lifts it. Never a full spin — the beam must stay readable.
+    // float + a slow tilt; scroll turns it a little further and lifts it.
     prism.position.y = 1.35 + Math.sin(t * 0.5) * 0.12 + p * 0.9;
     prism.rotation.set(
       0.10 + Math.sin(t * 0.22) * 0.06 + p * 0.35 + mouse.y * 0.05,
@@ -324,13 +270,15 @@ export function mountHero(canvas: HTMLCanvasElement, opts: { scrollEl?: HTMLElem
     (edgesB.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m1) * (1 - smooth(0.0, 0.5, m2));
     (edgesC.material as THREE.LineBasicMaterial).opacity = 0.55 * smooth(0.5, 1.0, m2);
     body.rotation.set(m1 * 0.3 + m2 * 0.2, m1 * 0.8 + m2 * 1.2 + t * 0.12 * m1, m1 * 0.15);
-    const beamOn = 1 - smooth(0.04, 0.16, p);
-    beamU.uAlpha.value = 0.9 * beamOn; innerU.uAlpha.value = 0.8 * beamOn; glintU.uAlpha.value = 0.55 * beamOn;
-    rayU.forEach((u, i) => { u.uAlpha.value = (0.62 + 0.1 * Math.sin(t * 1.1 + i)) * beamOn; });
-    lightWorld.set(entry.x, entry.y, 0.4); prism.localToWorld(lightWorld);
+    // the extracted piece drifts beside the subject, lifting a little higher with each beat, tumbling slowly
+    const lift = 1 + p * 0.6;
+    piece.position.set(2.5 + Math.sin(t * 0.37) * 0.15, (0.9 + Math.sin(t * 0.5 + 1.2) * 0.12) * lift, 0.9 + Math.cos(t * 0.3) * 0.2);
+    piece.rotation.set(body.rotation.x + t * 0.18, body.rotation.y - t * 0.25, body.rotation.z + 0.4);
+    pieceGlow.position.copy(piece.position); pieceGlow.lookAt(camera.position);
+    lightWorld.set(-4, 5, 4); prism.localToWorld(lightWorld);
     glassU.uLight.value.copy(lightWorld); glassU.uCam.value.copy(camera.position); glassU.uTime.value = t;
 
-    ribbonAlpha.value = smooth(0.2, 0.5, p) * (1 - 0.3 * smooth(0.8, 1, p));
+    ribbonAlpha.value = 0.55 + 0.45 * smooth(0.0, 0.5, p) - 0.3 * smooth(0.8, 1, p);
 
     camera.position.set(camBase.x + mouse.x * 0.5, camBase.y + mouse.y * 0.3 + p * 0.5, camBase.z - p * 1.0);
     camera.lookAt(0, 0.9 + p * 0.5, 0);
