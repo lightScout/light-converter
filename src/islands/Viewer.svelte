@@ -17,6 +17,9 @@
   let saving = $state(false);
   let undo: ImageData[] = [];
   let canUndo = $state(false);
+  let zoom = $state(1);
+  let pan = $state({ x: 0, y: 0 });
+  let panning = false, panLast: [number, number] | null = null, space = false;
 
   let canvas: HTMLCanvasElement;                   // the working result (edited in place)
   let cursor: HTMLDivElement;
@@ -45,11 +48,19 @@
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onclose();
       if (mode === 'edit') { if (e.key === 'e') tool = 'erase'; if (e.key === 'r') tool = 'restore'; if (e.key === '[') size = Math.max(6, size - 8); if (e.key === ']') size = Math.min(300, size + 8); if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undoOnce(); } }
-      if (e.key === ' ') { compare = e.type === 'keydown'; e.preventDefault(); }
+      if (e.key === ' ') { if (mode === 'edit') space = e.type === 'keydown'; else compare = e.type === 'keydown'; e.preventDefault(); }
+      if (mode === 'edit' && e.type === 'keydown') { if (e.key === '=' || e.key === '+') setZoom(zoom * 1.25); if (e.key === '-') setZoom(zoom / 1.25); if (e.key === '0') { zoom = 1; pan = { x: 0, y: 0 }; } }
     };
     addEventListener('keydown', key); addEventListener('keyup', key);
     return () => { cancelled = true; removeEventListener('keydown', key); removeEventListener('keyup', key); orig?.close(); };
   });
+
+  function setZoom(z: number, cx?: number, cy?: number) {
+    const nz = Math.min(8, Math.max(1, z));
+    if (cx !== undefined && cy !== undefined) { const r = stage.getBoundingClientRect(); const ox = cx - (r.left + r.width / 2) - pan.x, oy = cy - (r.top + r.height / 2) - pan.y; const k = nz / zoom; pan = { x: pan.x - ox * (k - 1), y: pan.y - oy * (k - 1) }; }
+    zoom = nz; if (zoom === 1) pan = { x: 0, y: 0 };
+  }
+  function wheel(e: WheelEvent) { if (mode !== 'edit') return; e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e.clientX, e.clientY); }
 
   /* canvas-space point from a pointer event */
   function pt(e: PointerEvent): [number, number] {
@@ -84,13 +95,18 @@
     const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (size * 0.15)));
     for (let i = 0; i <= n; i++) dab(a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n);
   }
-  function down(e: PointerEvent) { if (mode !== 'edit' || !origData) return; snapshot(); painting = true; dirty = true; last = pt(e); dab(...last); canvas.setPointerCapture(e.pointerId); }
+  function down(e: PointerEvent) {
+    if (mode !== 'edit' || !origData) return;
+    if (space || e.button === 1) { panning = true; panLast = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); return; }
+    snapshot(); painting = true; dirty = true; last = pt(e); dab(...last); canvas.setPointerCapture(e.pointerId);
+  }
   function move(e: PointerEvent) {
     cursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+    if (panning && panLast) { pan = { x: pan.x + e.clientX - panLast[0], y: pan.y + e.clientY - panLast[1] }; panLast = [e.clientX, e.clientY]; return; }
     if (!painting || !last) return;
     const p = pt(e); stroke(last, p); last = p;
   }
-  function up() { painting = false; last = null; }
+  function up() { painting = false; last = null; panning = false; panLast = null; }
 
   async function apply() {
     saving = true;
@@ -111,12 +127,12 @@
     </nav>
   </header>
 
-  <div class="stage" bind:this={stage} class:editing={mode === 'edit'} class:compare>
-    <div class={`board ${back}`}>
+  <div class="stage" bind:this={stage} class:editing={mode === 'edit'} class:compare onwheel={wheel}>
+    <div class={`board ${back}`} style={`transform: translate(${pan.x}px, ${pan.y}px) scale(${zoom})`}>
       <canvas bind:this={canvas} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onpointerleave={() => cursor.style.opacity = '0'} onpointerenter={() => cursor.style.opacity = mode === 'edit' ? '1' : '0'}></canvas>
       {#if compare}<img class="orig" src={urlFor(image.src)} alt="" />{/if}
     </div>
-    <div class="cursor" bind:this={cursor} style={`width:${size}px;height:${size}px`}></div>
+    <div class={`cursor ${tool}`} bind:this={cursor} style={`width:${size}px;height:${size}px`}><span>{tool === 'restore' ? '+' : '−'}</span></div>
   </div>
 
   <footer class="bottom cells">
@@ -130,11 +146,15 @@
       <span class="grow"><button class="label" onpointerdown={() => compare = true} onpointerup={() => compare = false} onpointerleave={() => compare = false}>Hold to compare</button></span>
       <span class="label dim">Space · compare</span>
     {:else}
-      <button class="label tool" class:on={tool === 'restore'} onclick={() => tool = 'restore'}>Restore</button>
-      <button class="label tool" class:on={tool === 'erase'} onclick={() => tool = 'erase'}>Erase</button>
+      <span class="tools" role="radiogroup" aria-label="Brush">
+        <button class="bevel tool restore" class:light={tool === 'restore'} role="radio" aria-checked={tool === 'restore'} onclick={() => tool = 'restore'}><i class="ico">+</i>Restore</button>
+        <button class="bevel tool erase" class:light={tool === 'erase'} role="radio" aria-checked={tool === 'erase'} onclick={() => tool = 'erase'}><i class="ico">−</i>Erase</button>
+      </span>
+      <span class="label dim hint">{tool === 'restore' ? 'Paint to bring the original back' : 'Paint to remove'}</span>
       <span class="size"><span class="label dim">Size</span><input type="range" min="6" max="300" bind:value={size} /></span>
+      <span class="zoom"><button class="label" onclick={() => setZoom(zoom / 1.25)} aria-label="Zoom out">−</button><button class="label z" onclick={() => { zoom = 1; pan = { x: 0, y: 0 }; }}>{Math.round(zoom * 100)}%</button><button class="label" onclick={() => setZoom(zoom * 1.25)} aria-label="Zoom in">+</button></span>
       <span class="grow"><button class="label" onclick={undoOnce} disabled={!canUndo}>Undo</button></span>
-      <span class="label dim">R · E · [ ] · ⌘Z</span>
+      <span class="label dim">Wheel · zoom  Space+drag · pan  R E [ ] ⌘Z</span>
       <button class="bevel light" onclick={apply} disabled={!dirty || saving}><i class="glyph"></i>{saving ? 'Saving…' : 'Apply'}</button>
     {/if}
   </footer>
@@ -147,14 +167,25 @@
   .top nav button, .bottom button.label, .tool { color: var(--dim); transition: color 200ms; }
   .top nav button:hover, .top nav button.on, .bottom button.label:hover, .tool.on { color: var(--text); }
   .stage { position: relative; display: grid; place-items: center; padding: 24px 44px; overflow: hidden; }
-  .board { position: relative; max-width: 100%; max-height: calc(100vh - 220px); display: grid; --cut: 16px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+  .board { position: relative; transform-origin: center; transition: transform 120ms ease-out; max-width: 100%; max-height: calc(100vh - 220px); display: grid; --cut: 16px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
   .board.checker { background-color: #f0f0f0; background-image: linear-gradient(45deg, #c9c9c9 25%, transparent 25%), linear-gradient(-45deg, #c9c9c9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #c9c9c9 75%), linear-gradient(-45deg, transparent 75%, #c9c9c9 75%); background-size: 36px 36px; background-position: 0 0, 0 18px, 18px -18px, -18px 0; }
   .board.white { background: #fff; } .board.black { background: #000; } .board.navy { background: var(--base); }
   canvas { display: block; max-width: 100%; max-height: calc(100vh - 220px); object-fit: contain; touch-action: none; }
   .editing canvas { cursor: none; }
+  .editing .board { transition: none; }
   .orig { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
   .cursor { position: fixed; left: 0; top: 0; margin: -50% 0 0 -50%; border-radius: 50%; border: 1px solid rgba(var(--glow), 0.9); box-shadow: 0 0 12px rgba(var(--glow), 0.5), inset 0 0 0 1px rgba(3, 10, 24, 0.5); pointer-events: none; opacity: 0; transform: translate(-100px, -100px); }
-  .cursor { margin: 0; translate: -50% -50%; }
+  .cursor { margin: 0; translate: -50% -50%; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--text); text-shadow: 0 0 4px rgba(3, 10, 24, 0.9); }
+  .cursor.restore { border-color: #9cf0c8; box-shadow: 0 0 12px rgba(156, 240, 200, 0.6), inset 0 0 0 1px rgba(3, 10, 24, 0.5); }
+  .cursor.erase { border-color: #ff9c9c; box-shadow: 0 0 12px rgba(255, 156, 156, 0.6), inset 0 0 0 1px rgba(3, 10, 24, 0.5); }
+  .tools { display: flex; gap: 6px; }
+  .tool { padding: 8px 12px; }
+  .tool .ico { font-style: normal; font-weight: 700; width: 14px; text-align: center; }
+  .tool.restore.light { background: #9cf0c8; }
+  .tool.erase.light { background: #ffb3b3; }
+  .hint { min-width: 220px; }
+  .zoom { display: flex; align-items: center; gap: 10px; }
+  .zoom .z { min-width: 44px; text-align: center; }
   .bottom { margin: 0 15px 15px; color: var(--muted); background: rgba(3, 10, 24, 0.55); }
   .chips { display: flex; gap: 10px; }
   .swatch { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.25); transition: box-shadow 200ms; }
