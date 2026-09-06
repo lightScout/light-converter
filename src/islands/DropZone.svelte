@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createBatch } from '../lib/batches';
+  import { navigate } from 'astro:transitions/client';
 
   let { label = 'Drop images here', hint = 'or paste  ⌘V' }: { label?: string; hint?: string } = $props();
 
@@ -14,7 +15,7 @@
     busy = true;
     try {
       const batch = await createBatch(list);
-      if (batch.images.length) location.href = `/app/batch?id=${batch.id}`;
+      if (batch.images.length) navigate(`/app/batch?id=${batch.id}`);   // client-side: the model worker stays alive
     } finally { busy = false; }
   }
 

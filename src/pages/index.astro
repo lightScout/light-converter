@@ -55,26 +55,32 @@ const beats = [
 
 <script>
   import { scrambleAll } from '../lib/scramble';
-  const canvas = document.getElementById('hero3d') as HTMLCanvasElement | null;
-  if (canvas) {
-    import('../islands/hero3d').then(({ mountHero }) => { mountHero(canvas); canvas.classList.add('is-live'); });
-  }
-  scrambleAll(document, 30);
-  const beats = [...document.querySelectorAll<HTMLElement>('.beat')];
-  const idx = [...document.querySelectorAll<HTMLElement>('.index a')];
-  const fill = document.getElementById('fill')!;
-  const hint = document.querySelector<HTMLElement>('.scroll')!;
-  let cur = 0;
-  const update = () => {
-    const max = document.documentElement.scrollHeight - innerHeight;
-    const p = max > 0 ? scrollY / max : 0;
-    fill.style.transform = `scaleX(${p})`;
-    hint.style.opacity = String(Math.max(0, 1 - p * 6));
-    const i = Math.min(beats.length - 1, Math.round(p * (beats.length - 1)));
-    if (i !== cur) { beats[cur].classList.remove('on'); idx[cur].classList.remove('on'); cur = i; beats[cur].classList.add('on'); idx[cur].classList.add('on'); }
+  let dispose: (() => void) | null = null;
+  let offScroll: (() => void) | null = null;
+  const boot = () => {
+    const canvas = document.getElementById('hero3d') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    import('../islands/hero3d').then(({ mountHero }) => { dispose = mountHero(canvas); canvas.classList.add('is-live'); });
+    scrambleAll(document, 30);
+    const beats = [...document.querySelectorAll<HTMLElement>('.beat')];
+    const idx = [...document.querySelectorAll<HTMLElement>('.index a')];
+    const fill = document.getElementById('fill')!;
+    const hint = document.querySelector<HTMLElement>('.scroll')!;
+    let cur = 0;
+    const update = () => {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const p = max > 0 ? scrollY / max : 0;
+      fill.style.transform = `scaleX(${p})`;
+      hint.style.opacity = String(Math.max(0, 1 - p * 6));
+      const i = Math.min(beats.length - 1, Math.round(p * (beats.length - 1)));
+      if (i !== cur) { beats[cur].classList.remove('on'); idx[cur].classList.remove('on'); cur = i; beats[cur].classList.add('on'); idx[cur].classList.add('on'); }
+    };
+    addEventListener('scroll', update, { passive: true });
+    offScroll = () => removeEventListener('scroll', update);
+    idx.forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const i = Number(a.dataset.i); const max = document.documentElement.scrollHeight - innerHeight; scrollTo({ top: Math.round((i / (beats.length - 1)) * max), behavior: 'smooth' }); }));
   };
-  addEventListener('scroll', update, { passive: true });
-  idx.forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const i = Number(a.dataset.i); const max = document.documentElement.scrollHeight - innerHeight; scrollTo({ top: Math.round((i / (beats.length - 1)) * max), behavior: 'smooth' }); }));
+  document.addEventListener('astro:page-load', boot);
+  document.addEventListener('astro:before-swap', () => { dispose?.(); dispose = null; offScroll?.(); offScroll = null; });
 </script>
 
 <style>

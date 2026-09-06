@@ -34,7 +34,7 @@ import Star from '../components/Star.astro';
 
 <script>
   import { scrambleAll } from '../lib/scramble';
-  scrambleAll(document, 30);
+  document.addEventListener('astro:page-load', () => scrambleAll(document, 30));
 </script>
 
 <style>

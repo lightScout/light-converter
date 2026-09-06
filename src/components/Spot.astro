@@ -3,14 +3,14 @@
 ---
 <div class="spot" id="spot" aria-hidden="true"></div>
 <script>
-  const el = document.getElementById('spot');
-  if (el && matchMedia('(pointer: fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const el = () => document.getElementById('spot');
+  if (matchMedia('(pointer: fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     let raf = 0, x = 0, y = 0;
     addEventListener('pointermove', (e) => {
       x = e.clientX; y = e.clientY;
-      if (!raf) raf = requestAnimationFrame(() => { el.style.setProperty('--mx', x + 'px'); el.style.setProperty('--my', y + 'px'); el.classList.add('on'); raf = 0; });
+      if (!raf) raf = requestAnimationFrame(() => { const s = el(); if (s) { s.style.setProperty('--mx', x + 'px'); s.style.setProperty('--my', y + 'px'); s.classList.add('on'); } raf = 0; });
     }, { passive: true });
-    addEventListener('pointerleave', () => el.classList.remove('on'));
-    document.addEventListener('mouseleave', () => el.classList.remove('on'));
+    addEventListener('pointerleave', () => el()?.classList.remove('on'));
+    document.addEventListener('mouseleave', () => el()?.classList.remove('on'));
   }
 </script>

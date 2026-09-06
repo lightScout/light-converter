@@ -5,15 +5,19 @@ const { variant = 'valley', class: cls = '' } = Astro.props;
 ---
 <canvas class={`scene ${cls}`} data-variant={variant} aria-hidden="true"></canvas>
 <script>
-  const canvas = document.querySelector('canvas.scene') as HTMLCanvasElement | null;
-  if (canvas) {
+  let dispose: (() => void) | null = null;
+  const boot = () => {
+    const canvas = document.querySelector('canvas.scene') as HTMLCanvasElement | null;
+    if (!canvas) return;
     const go = async () => {
       const { mountHero } = await import('../islands/hero3d');
-      mountHero(canvas, { ambient: true, variant: canvas.dataset.variant as any });
+      dispose = mountHero(canvas, { ambient: true, variant: canvas.dataset.variant as any });
       canvas.classList.add('is-live');
     };
     if ('requestIdleCallback' in window) (window as any).requestIdleCallback(go, { timeout: 800 }); else setTimeout(go, 50);
-  }
+  };
+  document.addEventListener('astro:page-load', boot);
+  document.addEventListener('astro:before-swap', () => { dispose?.(); dispose = null; });
 </script>
 <style>
   .scene { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1600ms ease; background: var(--base); }

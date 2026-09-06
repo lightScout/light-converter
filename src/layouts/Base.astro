@@ -3,6 +3,7 @@ import '@fontsource-variable/inter';
 import '@fontsource/instrument-serif/400-italic.css';
 import '@fontsource-variable/jetbrains-mono';
 import '../styles/global.css';
+import { ClientRouter } from 'astro:transitions';
 
 interface Props {
   title?: string;
@@ -19,6 +20,7 @@ const { title = 'Light Converter', description = 'Lift the subject. Keep the lig
     <meta name="description" content={description} />
     <meta name="theme-color" content="#030a18" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <ClientRouter />
   </head>
   <body>
     <slot />

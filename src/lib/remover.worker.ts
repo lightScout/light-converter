@@ -41,6 +41,10 @@ let backend: Backend = 'wasm';
 const post = (m: WorkerOut, transfer?: Transferable[]) => (self as any).postMessage(m, transfer ?? []);
 
 async function fetchModel(url: string): Promise<ArrayBuffer> {
+  // Model bytes live in Cache Storage after the first download, whatever the server's cache headers say.
+  const cache = 'caches' in self ? await caches.open('lc-models-v1').catch(() => null) : null;
+  const hit = cache ? await cache.match(url).catch(() => undefined) : undefined;
+  if (hit) { const buf = await hit.arrayBuffer(); post({ type: 'progress', loaded: buf.byteLength, total: buf.byteLength }); return buf; }
   const res = await fetch(url);
   if (!res.ok || !res.body) throw new Error(`model ${res.status} ${url}`);
   const total = Number(res.headers.get('content-length') || 0);
@@ -55,6 +59,7 @@ async function fetchModel(url: string): Promise<ArrayBuffer> {
   }
   const out = new Uint8Array(loaded);
   let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
+  if (cache) cache.put(url, new Response(out.slice().buffer, { headers: { 'content-type': 'application/octet-stream' } })).catch(() => {});
   return out.buffer;
 }
 

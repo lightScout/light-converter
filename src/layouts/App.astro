@@ -61,7 +61,11 @@ const items = [
 
 <script>
   import { scrambleAll } from '../lib/scramble';
-  scrambleAll(document, 30);
+  document.addEventListener('astro:page-load', () => {
+    scrambleAll(document, 30);
+    // load the model once, early — it lives in a worker that survives page swaps
+    if (location.pathname.startsWith('/app')) import('../lib/remover').then(m => m.warmUp().catch(() => {}));
+  });
 </script>
 
 <style>
