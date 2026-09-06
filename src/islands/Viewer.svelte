@@ -13,6 +13,8 @@
   let compare = $state(false);
   let tool = $state<'restore' | 'erase'>('restore');
   let size = $state(48);
+  let hardness = $state(60);      // 0 soft … 100 hard edge
+  let strength = $state(100);     // how much one pass applies
   let dirty = $state(false);
   let saving = $state(false);
   let undo: ImageData[] = [];
@@ -80,7 +82,8 @@
     for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
       const dx = x0 + xx - x, dy = y0 + yy - y, dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > r) continue;
-      const k = Math.min(1, (r - dist) / (r * 0.25));            // soft edge on the outer quarter
+      const soft = Math.max(0.02, 1 - hardness / 100);               // fraction of the radius that feathers
+      const k = Math.min(1, (r - dist) / (r * soft)) * (strength / 100);
       const i = (yy * w + xx) * 4, j = ((y0 + yy) * W + (x0 + xx)) * 4;
       if (tool === 'restore') {
         const a = p[i + 3] / 255, na = a + (1 - a) * k;
@@ -92,7 +95,7 @@
     ctx.putImageData(d, x0, y0);
   }
   function stroke(a: [number, number], b: [number, number]) {
-    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (size * 0.15)));
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (size * 0.12)));
     for (let i = 0; i <= n; i++) dab(a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n);
   }
   function down(e: PointerEvent) {
@@ -132,7 +135,7 @@
       <canvas bind:this={canvas} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onpointerleave={() => cursor.style.opacity = '0'} onpointerenter={() => cursor.style.opacity = mode === 'edit' ? '1' : '0'}></canvas>
       {#if compare}<img class="orig" src={urlFor(image.src)} alt="" />{/if}
     </div>
-    <div class={`cursor ${tool}`} bind:this={cursor} style={`width:${size}px;height:${size}px`}><span>{tool === 'restore' ? '+' : '−'}</span></div>
+    <div class={`cursor ${tool}`} bind:this={cursor} style={`width:${size}px;height:${size}px;opacity:0`}><i class="core" style={`inset:${(100 - hardness) / 2}%`}></i><span>{tool === 'restore' ? '+' : '−'}</span></div>
   </div>
 
   <footer class="bottom cells">
@@ -150,11 +153,14 @@
         <button class="bevel tool restore" class:light={tool === 'restore'} role="radio" aria-checked={tool === 'restore'} onclick={() => tool = 'restore'}><i class="ico">+</i>Restore</button>
         <button class="bevel tool erase" class:light={tool === 'erase'} role="radio" aria-checked={tool === 'erase'} onclick={() => tool = 'erase'}><i class="ico">−</i>Erase</button>
       </span>
-      <span class="label dim hint">{tool === 'restore' ? 'Paint to bring the original back' : 'Paint to remove'}</span>
-      <span class="size"><span class="label dim">Size</span><input type="range" min="6" max="300" bind:value={size} /></span>
+      <span class="label dim hint">{tool === 'restore' ? 'Brings the original back' : 'Removes'}</span>
+      <span class="params">
+        <label class="param"><span class="label dim">Size</span><input type="range" min="6" max="300" bind:value={size} /><span class="label val">{size}</span></label>
+        <label class="param"><span class="label dim">Hardness</span><input type="range" min="0" max="100" bind:value={hardness} /><span class="label val">{hardness}</span></label>
+        <label class="param"><span class="label dim">Strength</span><input type="range" min="5" max="100" bind:value={strength} /><span class="label val">{strength}</span></label>
+      </span>
       <span class="zoom"><button class="label" onclick={() => setZoom(zoom / 1.25)} aria-label="Zoom out">−</button><button class="label z" onclick={() => { zoom = 1; pan = { x: 0, y: 0 }; }}>{Math.round(zoom * 100)}%</button><button class="label" onclick={() => setZoom(zoom * 1.25)} aria-label="Zoom in">+</button></span>
       <span class="grow"><button class="label" onclick={undoOnce} disabled={!canUndo}>Undo</button></span>
-      <span class="label dim">Wheel · zoom  Space+drag · pan  R E [ ] ⌘Z</span>
       <button class="bevel light" onclick={apply} disabled={!dirty || saving}><i class="glyph"></i>{saving ? 'Saving…' : 'Apply'}</button>
     {/if}
   </footer>
@@ -176,6 +182,7 @@
   .orig { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
   .cursor { position: fixed; left: 0; top: 0; margin: -50% 0 0 -50%; border-radius: 50%; border: 1px solid rgba(var(--glow), 0.9); box-shadow: 0 0 12px rgba(var(--glow), 0.5), inset 0 0 0 1px rgba(3, 10, 24, 0.5); pointer-events: none; opacity: 0; transform: translate(-100px, -100px); }
   .cursor { margin: 0; translate: -50% -50%; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--text); text-shadow: 0 0 4px rgba(3, 10, 24, 0.9); }
+  .cursor .core { position: absolute; border-radius: 50%; border: 1px dashed rgba(var(--glow), 0.55); pointer-events: none; }
   .cursor.restore { border-color: #9cf0c8; box-shadow: 0 0 12px rgba(156, 240, 200, 0.6), inset 0 0 0 1px rgba(3, 10, 24, 0.5); }
   .cursor.erase { border-color: #ff9c9c; box-shadow: 0 0 12px rgba(255, 156, 156, 0.6), inset 0 0 0 1px rgba(3, 10, 24, 0.5); }
   .tools { display: flex; gap: 6px; }
@@ -183,7 +190,7 @@
   .tool .ico { font-style: normal; font-weight: 700; width: 14px; text-align: center; }
   .tool.restore.light { background: #9cf0c8; }
   .tool.erase.light { background: #ffb3b3; }
-  .hint { min-width: 220px; }
+  .hint { min-width: 150px; white-space: nowrap; }
   .zoom { display: flex; align-items: center; gap: 10px; }
   .zoom .z { min-width: 44px; text-align: center; }
   .bottom { margin: 0 15px 15px; color: var(--muted); background: rgba(3, 10, 24, 0.55); }
@@ -192,8 +199,10 @@
   .swatch.on { box-shadow: 0 0 0 1px var(--text), 0 0 10px rgba(var(--glow), 0.6); }
   .swatch.checker { background: repeating-conic-gradient(#c9c9c9 0 25%, #f0f0f0 0 50%) 0 0 / 8px 8px; }
   .swatch.white { background: #fff; } .swatch.black { background: #000; } .swatch.navy { background: var(--base); }
-  .size { display: flex; align-items: center; gap: 12px; }
-  input[type=range] { width: 140px; accent-color: var(--lavender); }
+  .params { display: flex; gap: 22px; }
+  .param { display: flex; align-items: center; gap: 8px; }
+  .val { min-width: 26px; text-align: right; color: var(--muted); }
+  input[type=range] { width: 96px; accent-color: var(--lavender); }
   .bottom .bevel { margin-left: 8px; }
   button:disabled { opacity: 0.4; }
 </style>
