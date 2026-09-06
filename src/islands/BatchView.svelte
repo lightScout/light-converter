@@ -1,9 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getBatch, runLocal, createBatch, upsert, urlFor, type Batch } from '../lib/batches';
+  import { getBatch, runLocal, createBatch, upsert, urlFor, type Batch, type BatchImage } from '../lib/batches';
   import { onStatus, type RemoverStatus } from '../lib/remover';
   import { downloadBatch, downloadImage } from '../lib/download';
   import Loader from '../components/Loader.svelte';
+  import Viewer from './Viewer.svelte';
+
+  let viewer = $state<{ img: BatchImage; mode: 'preview' | 'edit' } | null>(null);
+  async function saveEdit(img: BatchImage, result: Blob) {
+    if (!batch) return;
+    img.result = result; batch = { ...batch };
+    await upsert(batch);
+  }
 
   let batch = $state<Batch | null>(null);
   let missing = $state(false);
@@ -91,7 +99,11 @@
         {#if img.state === 'done'}
           <div class="checker result" style={`background-image:url(${urlFor(img.result)})`}></div>
           <div class="reveal" aria-hidden="true"></div>
-          <button class="dl" onclick={() => downloadImage(img)} aria-label={`Download ${img.name}`}>Download</button>
+          <div class="acts">
+            <button class="label" onclick={() => viewer = { img, mode: 'preview' }}>Preview</button>
+            <button class="label" onclick={() => viewer = { img, mode: 'edit' }}>Edit</button>
+            <button class="label" onclick={() => downloadImage(img)}>Download</button>
+          </div>
         {:else}
           <div class="orig" style={`background-image:url(${urlFor(img.src)})`}></div>
           {#if img.state !== 'queued'}
@@ -101,6 +113,10 @@
       </li>
     {/each}
   </ul>
+{/if}
+
+{#if viewer}
+  <Viewer image={viewer.img} mode={viewer.mode} onclose={() => viewer = null} onsave={(b) => saveEdit(viewer!.img, b)} />
 {/if}
 
 <style>
@@ -138,15 +154,16 @@
   .result { background-size: contain; opacity: 0.94; }
   .orig { opacity: 0.16; background-size: cover; filter: saturate(0.5) blur(0.5px); }
   .checker { background-color: rgba(244, 244, 247, 0.92); }
-  .dl {
+  .acts {
     position: absolute; left: 0; right: 0; bottom: 0;
-    padding: 12px 0 14px;
-    font-size: 13px; font-weight: 500; color: var(--text);
-    background: linear-gradient(to top, rgba(10, 16, 41, 0.85), rgba(10, 16, 41, 0));
+    display: flex; justify-content: center; gap: 18px; padding: 14px 0 12px;
+    background: linear-gradient(to top, rgba(3, 10, 24, 0.85), rgba(3, 10, 24, 0));
     opacity: 0; transform: translateY(6px);
     transition: opacity 180ms ease, transform 220ms var(--ease);
   }
-  .tile:hover .dl, .tile:focus-within .dl { opacity: 1; transform: none; }
+  .acts button { color: var(--muted); transition: color 200ms; }
+  .acts button:hover { color: var(--text); }
+  .tile:hover .acts, .tile:focus-within .acts { opacity: 1; transform: none; }
   /* One loader: a point of light travelling around the card's edge. */
   .ring {
     position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
