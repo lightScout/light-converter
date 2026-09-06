@@ -8,7 +8,7 @@ import Spot from '../components/Spot.astro';
 const beats = [
   { id: 'lift', label: 'Lift', h1: 'Lift the subject.', h2: 'Keep the light.', p: 'Clean cutouts, one image or a hundred. Pay only for the ones that work.' },
   { id: 'keep', label: 'Keep', h1: 'Nothing leaves', h2: 'your device.', p: 'The free tier runs the model on your own GPU. Your photos stay yours.' },
-  { id: 'light', label: 'Light', h1: 'Everything runs', h2: 'on Light.', p: 'One Light is one clean cutout. Fifteen free every month, no watermark, ever.' },
+  { id: 'light', label: 'Free', h1: 'Free, with ads.', h2: 'Or on Light.', p: 'Every cutout is free, no account, no watermark. Light removes the ads and adds server power.' },
 ];
 ---
 <Base>
@@ -30,7 +30,7 @@ const beats = [
     </aside>
 
     <footer class="hud bottom cells">
-      <span class="label dim" data-scramble>3 free · no account · no watermark</span>
+      <span class="label dim" data-scramble>Free with ads · no account · no watermark</span>
       <span class="grow"><i class="fill" id="fill"></i><span class="label scroll"><i></i><span data-scramble>Scroll to explore</span></span></span>
       <span class="label dim" data-scramble>WebGPU · on device</span>
     </footer>

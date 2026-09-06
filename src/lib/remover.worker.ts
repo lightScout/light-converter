@@ -108,6 +108,95 @@ function cleanComponents(mask: Float32Array, thresh = 0.5) {
   }
 }
 
+
+/** CLAHE on luma at model resolution: lifts low-contrast subjects (white shirt on a white wall) so the model can see them. */
+function boostContrast(rgba: Uint8ClampedArray, tiles = 8, clip = 2.5): Uint8ClampedArray {
+  const T = SIZE / tiles, out = new Uint8ClampedArray(rgba.length);
+  const lum = new Uint8Array(N);
+  for (let i = 0; i < N; i++) lum[i] = (rgba[i*4] * 0.299 + rgba[i*4+1] * 0.587 + rgba[i*4+2] * 0.114) | 0;
+  const luts = new Float32Array(tiles * tiles * 256);
+  const limit = clip * (T * T) / 256;
+  const h = new Float32Array(256);
+  for (let ty = 0; ty < tiles; ty++) for (let tx = 0; tx < tiles; tx++) {
+    h.fill(0);
+    for (let y = ty * T; y < (ty + 1) * T; y++) for (let x = tx * T; x < (tx + 1) * T; x++) h[lum[y * SIZE + x]]++;
+    let excess = 0; for (let b = 0; b < 256; b++) if (h[b] > limit) { excess += h[b] - limit; h[b] = limit; }
+    const add = excess / 256; let c = 0; const base = (ty * tiles + tx) * 256;
+    for (let b = 0; b < 256; b++) { c += h[b] + add; luts[base + b] = c; }
+    const c0 = luts[base], c1 = luts[base + 255] - c0 || 1;
+    for (let b = 0; b < 256; b++) luts[base + b] = (luts[base + b] - c0) / c1;
+  }
+  for (let y = 0; y < SIZE; y++) {
+    const fy = (y + 0.5) / T - 0.5, y0 = Math.min(tiles - 1, Math.max(0, Math.floor(fy))), y1 = Math.min(tiles - 1, y0 + 1), wy = Math.min(1, Math.max(0, fy - y0));
+    for (let x = 0; x < SIZE; x++) {
+      const fx = (x + 0.5) / T - 0.5, x0 = Math.min(tiles - 1, Math.max(0, Math.floor(fx))), x1 = Math.min(tiles - 1, x0 + 1), wx = Math.min(1, Math.max(0, fx - x0));
+      const i = y * SIZE + x, l = lum[i];
+      const v = luts[(y0 * tiles + x0) * 256 + l] * (1 - wy) * (1 - wx) + luts[(y0 * tiles + x1) * 256 + l] * (1 - wy) * wx
+              + luts[(y1 * tiles + x0) * 256 + l] * wy * (1 - wx) + luts[(y1 * tiles + x1) * 256 + l] * wy * wx;
+      const ratio = (v * 255) / Math.max(l, 1);
+      out[i*4] = Math.min(255, rgba[i*4] * ratio); out[i*4+1] = Math.min(255, rgba[i*4+1] * ratio); out[i*4+2] = Math.min(255, rgba[i*4+2] * ratio); out[i*4+3] = 255;
+    }
+  }
+  return out;
+}
+
+/** Label 4-connected components of (pred(i) true); returns labels (0 = none) and sizes. */
+function components(pred: (i: number) => boolean) {
+  const label = new Int32Array(N); const sizes: number[] = [0]; const stack = new Int32Array(N); let next = 1;
+  for (let start = 0; start < N; start++) {
+    if (label[start] || !pred(start)) continue;
+    let sp = 0, size = 0; stack[sp++] = start; label[start] = next;
+    while (sp) {
+      const p = stack[--sp]; size++; const x = p % SIZE, y = (p / SIZE) | 0;
+      if (x > 0 && !label[p - 1] && pred(p - 1)) { label[p - 1] = next; stack[sp++] = p - 1; }
+      if (x < SIZE - 1 && !label[p + 1] && pred(p + 1)) { label[p + 1] = next; stack[sp++] = p + 1; }
+      if (y > 0 && !label[p - SIZE] && pred(p - SIZE)) { label[p - SIZE] = next; stack[sp++] = p - SIZE; }
+      if (y < SIZE - 1 && !label[p + SIZE] && pred(p + SIZE)) { label[p + SIZE] = next; stack[sp++] = p + SIZE; }
+    }
+    sizes.push(size); next++;
+  }
+  return { label, sizes };
+}
+
+/** How much of the mask is undecided — a mottled region (a white shirt the model half-sees) scores high. */
+function uncertainty(mask: Float32Array) { let n = 0; for (let i = 0; i < N; i++) if (mask[i] > 0.15 && mask[i] < 0.85) n++; return n / N; }
+
+/** Second opinion: regions the contrast-boosted pass is sure about, and that touch the plain pass's main body, are added. */
+function fuse(plain: Float32Array, boosted: Float32Array): Float32Array {
+  const a = components(i => plain[i] > 0.5);
+  let main = 0; for (let k = 1; k < a.sizes.length; k++) if (a.sizes[k] > a.sizes[main]) main = k;
+  if (!main) return plain;
+  const b = components(i => boosted[i] > 0.45 || a.label[i] === main);
+  const keep = new Uint8Array(b.sizes.length);
+  for (let i = 0; i < N; i++) if (a.label[i] === main && b.label[i]) keep[b.label[i]] = 1;
+  const out = new Float32Array(N);
+  for (let i = 0; i < N; i++) out[i] = Math.max(plain[i], b.label[i] && keep[b.label[i]] ? Math.min(1, boosted[i] * 1.5) : 0);
+  return out;
+}
+
+/** Where the plain pass was undecided, the fused mask is speckled: smooth it there (box blur, re-thresholded), leaving confident edges alone. */
+function settle(mask: Float32Array, plain: Float32Array, r = 5) {
+  const blur = new Float32Array(N), tmp = new Float32Array(N);
+  for (let y = 0; y < SIZE; y++) { let sum = 0; const row = y * SIZE; for (let x = 0; x <= r; x++) sum += mask[row + x];
+    for (let x = 0; x < SIZE; x++) { const lo = x - r - 1, hi = x + r; if (hi < SIZE) sum += mask[row + hi]; if (lo >= 0) sum -= mask[row + lo]; tmp[row + x] = sum / (Math.min(hi, SIZE - 1) - Math.max(lo + 1, 0) + 1); } }
+  for (let x = 0; x < SIZE; x++) { let sum = 0; for (let y = 0; y <= r; y++) sum += tmp[y * SIZE + x];
+    for (let y = 0; y < SIZE; y++) { const lo = y - r - 1, hi = y + r; if (hi < SIZE) sum += tmp[hi * SIZE + x]; if (lo >= 0) sum -= tmp[lo * SIZE + x]; blur[y * SIZE + x] = sum / (Math.min(hi, SIZE - 1) - Math.max(lo + 1, 0) + 1); } }
+  for (let i = 0; i < N; i++) {
+    if (plain[i] > 0.85 || (plain[i] < 0.15 && mask[i] === plain[i])) continue;   // confident, untouched pixels keep their edges
+    const v = Math.min(1, Math.max(0, (blur[i] - 0.15) / 0.2));
+    mask[i] = v * v * (3 - 2 * v);
+  }
+}
+
+/** Fill enclosed holes (background pockets not touching the border) smaller than 2 % of the frame; smooth speckle inside. */
+function fillHoles(mask: Float32Array) {
+  const bg = components(i => mask[i] < 0.5);
+  const touches = new Uint8Array(bg.sizes.length);
+  for (let x = 0; x < SIZE; x++) { touches[bg.label[x]] = 1; touches[bg.label[(SIZE - 1) * SIZE + x]] = 1; }
+  for (let y = 0; y < SIZE; y++) { touches[bg.label[y * SIZE]] = 1; touches[bg.label[y * SIZE + SIZE - 1]] = 1; }
+  for (let i = 0; i < N; i++) { const l = bg.label[i]; if (l && !touches[l] && bg.sizes[l] < N * 0.06) mask[i] = 1; }
+}
+
 function postprocess(raw: Float32Array, s: ModelSpec): Float32Array {
   const mask = new Float32Array(N);
   if (s.post === 'sigmoid') {
@@ -119,7 +208,6 @@ function postprocess(raw: Float32Array, s: ModelSpec): Float32Array {
     // IS-Net's saliency is soft everywhere; pull the curve so background noise drops out and the subject saturates.
     for (let i = 0; i < N; i++) { const v = (raw[i] - lo) / range; mask[i] = Math.min(1, Math.max(0, (v - 0.15) / 0.7)); }
   }
-  cleanComponents(mask);
   return mask;
 }
 
@@ -165,16 +253,26 @@ async function init(base: string, force?: Backend) {
   post({ type: 'ready', backend, model: spec.name });
 }
 
+async function infer(rgba: Uint8ClampedArray): Promise<Float32Array> {
+  const input = new ort.Tensor('float32', preprocess(rgba, spec), [1, 3, SIZE, SIZE]);
+  const out = await session!.run({ input_image: input });
+  return postprocess(out.output_image.data as Float32Array, spec);
+}
+
 async function run(id: string, rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number) {
   if (!session) throw new Error('not ready');
-  const input = new ort.Tensor('float32', preprocess(rgba, spec), [1, 3, SIZE, SIZE]);
   const t = performance.now();
-  const out = await session.run({ input_image: input });
-  const raw = out.output_image.data as Float32Array;
-  const mask = postprocess(raw, spec);
+  let mask = await infer(rgba);
+  // Low-contrast subjects (a white shirt on a white wall) come back mottled. When that happens, take a second look
+  // at a contrast-boosted copy and let it fill in what touches the subject.
+  const u = uncertainty(mask);
+  let passes = 1;
+  if (u > 0.025) { const plain = mask; const boosted = await infer(boostContrast(rgba)); mask = fuse(plain, boosted); settle(mask, plain); passes = 2; }
+  cleanComponents(mask);
+  fillHoles(mask);
   const t2 = performance.now();
   const result = refineAlpha(full, width, height, mask, SIZE);
-  console.info('[remover] run', spec.name, backend, Math.round(t2 - t), 'ms + refine', Math.round(performance.now() - t2), 'ms');
+  console.info('[remover] run', spec.name, backend, passes + ' pass' + (passes > 1 ? 'es' : ''), 'uncertainty', u.toFixed(3), Math.round(t2 - t), 'ms + refine', Math.round(performance.now() - t2), 'ms');
   post({ type: 'result', id, rgba: result, width, height }, [result.buffer]);
 }
 

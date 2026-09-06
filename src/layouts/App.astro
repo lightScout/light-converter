@@ -15,11 +15,6 @@ const items = [
   { id: 'light', label: 'Light', href: '/app/light' },
   { id: 'settings', label: 'Settings', href: '/app/settings' },
 ] as const;
-const links = [
-  { n: '01', label: 'Pricing', href: '/pricing' },
-  { n: '02', label: 'Landing', href: '/' },
-  { n: '03', label: 'Sign out', href: '/' },
-];
 ---
 <Base title={title ? `${title} — Light Converter` : 'Light Converter'}>
   <div class="app">
@@ -34,31 +29,21 @@ const links = [
     <aside class="rail" aria-label="Main">
       <nav class="icons">
         {items.map(it => (
-          <a href={it.href} class:list={['item', { active: it.id === active }]} aria-current={it.id === active ? 'page' : undefined} title={it.label}>
+          <a href={it.href} class:list={['item', { active: it.id === active }]} aria-current={it.id === active ? 'page' : undefined}>
             <span class="icon" aria-hidden="true">
               {it.id === 'home' && <svg viewBox="0 0 20 20"><path d="M4 9.5 10 4.5l6 5V16H4z" /></svg>}
               {it.id === 'batches' && <svg viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="2" /></svg>}
               {it.id === 'light' && <Star size={16} color="currentColor" />}
               {it.id === 'settings' && <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" /><circle cx="10" cy="10" r="2" /></svg>}
             </span>
+            <span class="label lbl">{it.label}</span>
           </a>
         ))}
       </nav>
-
-      <div class="menu panel-light" aria-label="Menu">
-        <span class="label sq">Explore</span>
-        <nav class="big">
-          {items.map(it => <a href={it.href} class:list={['display', { active: it.id === active }]}>{it.label}</a>)}
-        </nav>
-        <span class="label sq">Links</span>
-        <div class="links">
-          {links.map(l => <a href={l.href} class="row"><span class="label">{l.label}</span><span class="label dim">{l.n}</span></a>)}
-        </div>
-        <div class="foot">
-          <span class="label">Juan</span>
-          <span class="label gold-dark">128 Light</span>
-        </div>
-      </div>
+      <a href="/app/light" class="user">
+        <span class="avatar" aria-hidden="true"></span>
+        <span class="lbl who"><span class="label">Juan</span><span class="label gold">128 Light</span></span>
+      </a>
     </aside>
 
     <main class="content">
@@ -89,36 +74,25 @@ const links = [
   .brand :global(svg) { filter: drop-shadow(0 0 8px rgba(var(--glow), 0.6)); }
   .bottom { left: 15px; right: 15px; bottom: 15px; color: var(--muted); background: rgba(3, 10, 24, 0.55); backdrop-filter: blur(10px); }
 
-  /* Rail: icons only; hovering opens the inverted menu panel over the content. */
-  .rail { position: fixed; left: 15px; top: 15px; bottom: 79px; width: var(--rail); z-index: 8; }
-  .icons { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; padding: 0 18px; }
-  .item { display: grid; place-items: center; width: 36px; height: 36px; color: var(--dim); transition: color 200ms; }
-  .item:hover { color: var(--text); }
-  .item.active { color: var(--text); }
-  .item.active .icon { filter: drop-shadow(0 0 6px rgba(var(--glow), 0.7)); }
-  .icon { width: 18px; height: 18px; display: grid; place-items: center; }
-  .icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
-
-  .menu {
-    position: absolute; left: 0; top: 0; bottom: 0; width: 380px;
-    padding: 32px 36px;
-    display: grid; grid-template-rows: auto 1fr auto auto auto; gap: 18px;
-    --cut: 22px;
-    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
-    transform: translateX(calc(-100% - 20px)); opacity: 0;
-    transition: transform 380ms var(--ease), opacity 260ms;
-    pointer-events: none;
+  /* Rail: icons only; hovering widens it and the labels slide in beside the icons. Content does not reflow. */
+  .rail {
+    position: fixed; left: 15px; top: 15px; bottom: 79px; width: var(--rail); z-index: 8;
+    display: flex; flex-direction: column; justify-content: center;
+    overflow: hidden;
+    transition: width 220ms var(--ease), background 220ms;
   }
-  .rail:hover .menu, .rail:focus-within .menu { transform: none; opacity: 1; pointer-events: auto; transition-delay: 120ms; }
-  .rail:hover .icons, .rail:focus-within .icons { opacity: 0; transition-delay: 120ms; }
-  .icons { transition: opacity 200ms; }
-  .big { display: grid; align-content: start; gap: 2px; margin-top: 8px; }
-  .big a { font-size: 52px; line-height: 1.02; color: var(--base); opacity: 0.55; transition: opacity 200ms, transform 300ms var(--ease); }
-  .big a:hover, .big a.active { opacity: 1; transform: translateX(6px); }
-  .links { display: grid; }
-  .links .row { padding: 12px 0; }
-  .foot { display: flex; justify-content: space-between; border-top: 1px solid rgba(2, 10, 24, 0.12); padding-top: 18px; }
-  .gold-dark { color: #7a5a1a; }
+  .rail:hover, .rail:focus-within { width: var(--rail-open); background: rgba(3, 10, 24, 0.55); backdrop-filter: blur(12px); }
+  .icons { display: grid; gap: 6px; padding: 0 18px; }
+  .item { display: flex; align-items: center; gap: 14px; height: 36px; padding: 0 9px; color: var(--dim); transition: color 200ms; white-space: nowrap; }
+  .item:hover, .item.active { color: var(--text); }
+  .item.active .icon { filter: drop-shadow(0 0 6px rgba(var(--glow), 0.7)); }
+  .icon { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
+  .icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .lbl { opacity: 0; transform: translateX(-6px); transition: opacity 160ms ease, transform 220ms var(--ease); }
+  .rail:hover .lbl, .rail:focus-within .lbl { opacity: 1; transform: none; transition-delay: 80ms; }
+  .user { position: absolute; left: 0; right: 0; bottom: 24px; display: flex; align-items: center; gap: 14px; padding: 0 27px; white-space: nowrap; }
+  .avatar { width: 18px; height: 18px; border-radius: 50%; flex: none; background: linear-gradient(160deg, #e9ecf7, #4a5f8a); }
+  .who { display: grid; line-height: 1.5; }
 
   .content { margin-left: var(--rail); min-height: 100svh; padding: 110px 96px 110px 200px; }
   @media (max-width: 1100px) { .content { padding: 96px 40px 96px 96px; } }
