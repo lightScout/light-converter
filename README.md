@@ -4,9 +4,7 @@ Batch background removal that runs entirely in the browser. Drop one image or a 
 
 Free and open source under the MIT licence.
 
-[![Light Converter demo — drop a photo, get a cutout, edit it](public/art/demo.webp)](public/art/demo.mp4)
-
-*Click to play — one image from drop to cutout to the editor, all on device.*
+![Light Converter — drop a photo, get a cutout, edit it, all on device](public/art/demo.gif)
 
 ## What it does
 
