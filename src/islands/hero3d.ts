@@ -309,9 +309,9 @@ const VARIANTS: Record<HeroVariant, { card: boolean; subject: number; ribbons: n
   valley: { card: true, subject: 0, ribbons: 0.7, haze: 0.20, motes: 1.0 },   // app home
   cloudsea: { card: false, subject: 2, ribbons: 0.35, haze: 0.14, motes: 0.6 },  // batch workspace: quiet
   night: { card: false, subject: 4, ribbons: 0.5, haze: 0.16, motes: 0.8 },   // batches list
-  aurora: { card: true, subject: 6, ribbons: 1.0, haze: 0.24, motes: 1.0 },   // light
+  aurora: { card: true, subject: 6, ribbons: 1.0, haze: 0.24, motes: 1.0 },   // spare
   still: { card: false, subject: 3, ribbons: 0.3, haze: 0.12, motes: 0.5 },   // settings
-  prism: { card: true, subject: 10, ribbons: 0.8, haze: 0.22, motes: 1.0 },   // pricing
+  prism: { card: true, subject: 10, ribbons: 0.8, haze: 0.22, motes: 1.0 },   // spare
 };
 
 export function mountHero(canvas: HTMLCanvasElement, opts: HeroOptions = {}) {

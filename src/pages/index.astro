@@ -4,11 +4,12 @@ import Star from '../components/Star.astro';
 import Frame from '../components/Frame.astro';
 import DropZone from '../islands/DropZone.svelte';
 import Spot from '../components/Spot.astro';
+import { REPO } from '../lib/site';
 
 const beats = [
-  { id: 'lift', label: 'Lift', h1: 'Lift the subject.', h2: 'Keep the light.', p: 'Clean cutouts, one image or a hundred. Pay only for the ones that work.' },
-  { id: 'keep', label: 'Keep', h1: 'Nothing leaves', h2: 'your device.', p: 'The free tier runs the model on your own GPU. Your photos stay yours.' },
-  { id: 'light', label: 'Free', h1: 'Free, with ads.', h2: 'Or on Light.', p: 'Every cutout is free, no account, no watermark. Light removes the ads and adds server power.' },
+  { id: 'lift', label: 'Lift', h1: 'Lift the subject.', h2: 'Keep the light.', p: 'Clean cutouts, one image or a hundred, straight from the browser.' },
+  { id: 'keep', label: 'Keep', h1: 'Nothing leaves', h2: 'your device.', p: 'The model runs on your own GPU. Your photos never upload anywhere.' },
+  { id: 'open', label: 'Open', h1: 'Free. Open source.', h2: 'Yours to run.', p: 'No account, no watermark, no limits. The whole thing lives on GitHub — run it, fork it, make it better.' },
 ];
 ---
 <Base>
@@ -19,8 +20,7 @@ const beats = [
     <header class="hud top">
       <a href="/" class="brand"><Star size={16} color="var(--lavender)" /><span class="label" data-scramble>Light Converter</span></a>
       <nav>
-        <a class="label" href="/pricing" data-scramble>Pricing</a>
-        <a class="label" href="/app" data-scramble>Sign in</a>
+        <a class="label" href={REPO} target="_blank" rel="noopener" data-scramble>GitHub</a>
         <a href="/app" class="bevel"><i class="glyph"></i><span data-scramble>Open app</span></a>
       </nav>
     </header>
@@ -30,7 +30,7 @@ const beats = [
     </aside>
 
     <footer class="hud bottom cells">
-      <span class="label dim" data-scramble>Free with ads · no account · no watermark</span>
+      <span class="label dim" data-scramble>Free · open source · no account · no watermark</span>
       <span class="grow"><i class="fill" id="fill"></i><span class="label scroll"><i></i><span data-scramble>Scroll to explore</span></span></span>
       <span class="label dim" data-scramble>WebGPU · on device</span>
     </footer>
@@ -44,7 +44,7 @@ const beats = [
           </h1>
           <p class="muted lead">{b.p}</p>
           {i === 0 && <DropZone client:load label="Drop images to try" />}
-          {i === 2 && <a class="bevel light" href="/pricing"><i class="glyph"></i>See plans</a>}
+          {i === 2 && <a class="bevel light" href={REPO} target="_blank" rel="noopener"><i class="glyph"></i>View on GitHub</a>}
         </article>
       ))}
     </section>

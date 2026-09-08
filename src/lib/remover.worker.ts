@@ -1,5 +1,5 @@
 /**
- * Background-removal worker — the free tier.
+ * Background-removal worker — runs entirely on the device.
  *
  *  WebGPU : BiRefNet (MIT, swin_v1_tiny backbone, ZhengPeng7/BiRefNet release v1), fp16 — /models/birefnet-tiny-fp16.onnx (114 MB)
  *  WASM   : IS-Net (Apache-2.0, DIS via rembg's export), int8                          — /models/isnet-int8.onnx (46 MB)

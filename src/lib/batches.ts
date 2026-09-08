@@ -1,6 +1,6 @@
 /**
- * Local batch store (IndexedDB, Blobs — no base64, no size ceiling). The real build keeps
- * originals/results in R2 and streams progress over SSE (see the plan); this is the seam.
+ * Local batch store (IndexedDB, Blobs — no base64, no size ceiling). Everything stays on the
+ * device: originals, results and progress. Nothing here talks to a server.
  */
 import { db, urlFor } from './db';
 
@@ -13,7 +13,6 @@ export interface BatchImage {
   result?: Blob;      // PNG with alpha
   state: ImageState;
   progress: number;   // 0..1
-  cost: number;       // Light
 }
 
 export interface Batch {
@@ -56,7 +55,7 @@ export async function createBatch(files: File[], name?: string): Promise<Batch> 
   const accepted = files.filter(f => /^image\/(jpeg|png|webp|heic|heif)$/i.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name)).slice(0, 50);
   const images: BatchImage[] = [];
   for (const f of accepted) {
-    try { images.push({ id: uid(), name: f.name, src: await shrink(f), state: 'queued', progress: 0, cost: 1 }); }
+    try { images.push({ id: uid(), name: f.name, src: await shrink(f), state: 'queued', progress: 0 }); }
     catch (e) { console.warn('[batches] could not decode', f.name, e); }
   }
   const batch: Batch = {
@@ -79,7 +78,7 @@ export function runLocal(batch: Batch, onChange: (b: Batch) => void) {
     for (const img of batch.images) if (img.state !== 'done') { img.state = 'uploading'; img.progress = 0.08; }
     onChange(batch);
     try { await warmUp(); } catch {
-      for (const img of batch.images) if (img.state !== 'done') { img.state = 'failed'; img.progress = 0; img.cost = 0; }
+      for (const img of batch.images) if (img.state !== 'done') { img.state = 'failed'; img.progress = 0; }
       onChange(batch); await upsert(batch); return;
     }
     for (const img of batch.images) {
@@ -92,7 +91,7 @@ export function runLocal(batch: Batch, onChange: (b: Batch) => void) {
         img.state = 'done'; img.progress = 1;
       } catch (e) {
         console.error('[remover]', e);
-        img.state = 'failed'; img.progress = 0; img.cost = 0;
+        img.state = 'failed'; img.progress = 0;
       } finally { clearInterval(tick); }
       onChange(batch); await upsert(batch);
     }

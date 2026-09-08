@@ -13,7 +13,7 @@
   --beam: #ffffff;
   --electric: #3d8bff;   /* light in transit */
   --off: #d5e0ff;        /* inverted surfaces (menu panel, primary chip) */
-  --gold: #f3e1b8;       /* Light, the currency: warm light */
+  --gold: #f3e1b8;       /* warm accent: progress, warnings */
   --success: #a8f0cc;
   --glow: 213, 224, 255; /* rgb of scattered light for rgba() glows */
   --blue: 61, 139, 255;  /* rgb of electric blue */

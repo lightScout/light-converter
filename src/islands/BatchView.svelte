@@ -20,7 +20,6 @@
 
   const done = $derived(batch ? batch.images.filter(i => i.state === 'done').length : 0);
   const total = $derived(batch?.images.length ?? 0);
-  const held = $derived(batch ? batch.images.reduce((s, i) => s + i.cost, 0) : 0);
 
   function start(b: Batch) {
     batch = b;
@@ -76,7 +75,7 @@
         <span class="accent count">{done} of {total}</span>
       </h1>
       <p class="dim sub label">
-        {batch.format} · {batch.size} · {held} Light
+        {batch.format} · {batch.size}
         {#if model.state === 'ready'}
           <span> · {model.model} · {model.backend}</span>
         {:else if model.state === 'error'}
