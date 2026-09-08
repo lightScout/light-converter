@@ -4,6 +4,10 @@ Batch background removal that runs entirely in the browser. Drop one image or a 
 
 Free and open source under the MIT licence.
 
+[![Light Converter demo — drop a photo, get a cutout, edit it](public/art/demo.webp)](public/art/demo.mp4)
+
+*Click to play — one image from drop to cutout to the editor, all on device.*
+
 ## What it does
 
 - Removes backgrounds from batches of images, fully on device (WebGPU, with a WASM fallback).
@@ -24,7 +28,7 @@ Free and open source under the MIT licence.
 ## Running it locally
 
 ```sh
-git clone https://github.com/juansilva/light-converter
+git clone https://github.com/lightScout/light-converter
 cd light-converter
 npm install                # also copies the onnxruntime WASM runtime into public/ort
 npm run models             # one-time: downloads and converts the two models (~160 MB in public/models)
@@ -127,4 +131,4 @@ Please keep the visual language of the app — minimal copy, few elements — wh
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Juan Silva
+[MIT](LICENSE) © 2026 Juan Muller Da Costa e Silva
