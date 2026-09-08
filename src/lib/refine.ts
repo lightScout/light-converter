@@ -80,7 +80,7 @@ function guidedFilter(I: Float32Array, p: Float32Array, W: number, H: number, r:
   return q;
 }
 
-export function refineAlpha(rgba: Uint8ClampedArray, W: number, H: number, mask: Float32Array, S: number): Uint8ClampedArray {
+export function refineAlpha(rgba: Uint8ClampedArray, W: number, H: number, mask: Float32Array, S: number, edge = 1): Uint8ClampedArray {
   const n = W * H;
   const coarse = upsampleBilinear(mask, S, W, H);
 
@@ -99,7 +99,7 @@ export function refineAlpha(rgba: Uint8ClampedArray, W: number, H: number, mask:
     const c = coarse[i];
     const d = Math.abs(c - 0.5);                       // 0 at the edge, 0.5 when certain
     const w = d < 0.3 ? 1 : d > 0.45 ? 0 : (0.45 - d) / 0.15; // 1 inside band, fades to 0 by c=0.05/0.95
-    let v = c + (q[i] - c) * w;
+    let v = c + (q[i] - c) * w * edge;
     alpha[i] = v < 0 ? 0 : v > 1 ? 1 : v;
   }
 

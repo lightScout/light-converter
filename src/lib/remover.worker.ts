@@ -10,11 +10,21 @@
  */
 import * as ort from 'onnxruntime-web';
 import { refineAlpha } from './refine';
+export type { RunParams as RemoverParams };
 
 export type Backend = 'webgpu' | 'wasm';
+/** Knobs the edit view exposes. All optional; defaults reproduce the batch run. */
+export interface RunParams {
+  sensitivity?: number;   // −1 … 1  shifts what counts as subject (+ keeps more, − cuts more)
+  secondLook?: 'auto' | 'on' | 'off';
+  boost?: number;         // CLAHE clip limit for the second look, 1 … 4
+  cleanup?: 'off' | 'normal' | 'strong';
+  fillHoles?: boolean;
+  edge?: number;          // 0 … 1  how much the guided filter is allowed to move edge alpha
+}
 export type WorkerIn =
   | { type: 'init'; base: string; force?: Backend }
-  | { type: 'run'; id: string; rgba: Uint8ClampedArray; full: Uint8ClampedArray; width: number; height: number };
+  | { type: 'run'; id: string; rgba: Uint8ClampedArray; full: Uint8ClampedArray; width: number; height: number; params?: RunParams };
 export type WorkerOut =
   | { type: 'ready'; backend: Backend; model: string }
   | { type: 'progress'; loaded: number; total: number }
@@ -75,7 +85,7 @@ function preprocess(rgba: Uint8ClampedArray, s: ModelSpec): Float32Array {
 }
 
 /** Keep only connected foreground components that are big enough; kills wall speckle and stray blobs. */
-function cleanComponents(mask: Float32Array, thresh = 0.5) {
+function cleanComponents(mask: Float32Array, thresh = 0.5, strength: 'normal' | 'strong' = 'normal') {
   const label = new Int32Array(N); // 0 = unvisited/background
   const sizes: number[] = [0];
   const stack = new Int32Array(N);
@@ -96,7 +106,7 @@ function cleanComponents(mask: Float32Array, thresh = 0.5) {
   }
   if (next <= 2) return; // one component, nothing to clean
   let largest = 0; for (const s of sizes) if (s > largest) largest = s;
-  const keepMin = Math.max(N * 0.002, largest * 0.03);
+  const keepMin = strength === 'strong' ? Math.max(N * 0.01, largest * 0.15) : Math.max(N * 0.002, largest * 0.03);
   const keep = sizes.map(s => s >= keepMin);
   const kept = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (label[i] && keep[label[i]]) kept[i] = 1;
@@ -258,26 +268,40 @@ async function init(base: string, force?: Backend) {
   post({ type: 'ready', backend, model: spec.name });
 }
 
-async function infer(rgba: Uint8ClampedArray): Promise<Float32Array> {
-  const input = new ort.Tensor('float32', preprocess(rgba, spec), [1, 3, SIZE, SIZE]);
-  const out = await session!.run({ input_image: input });
-  return postprocess(out.output_image.data as Float32Array, spec);
+function applySensitivity(mask: Float32Array, s: number) {
+  if (!s) return;
+  // shift the decision point: s>0 lowers it (keeps more), s<0 raises it; soft, so edges stay soft
+  const t = 0.5 - s * 0.35, g = 1 / (1 - Math.abs(s) * 0.5);
+  for (let i = 0; i < N; i++) { const v = (mask[i] - t) * g * 2; mask[i] = Math.min(1, Math.max(0, 0.5 + v / 2)); }
 }
 
-async function run(id: string, rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number) {
+async function infer(rgba: Uint8ClampedArray, sensitivity = 0): Promise<Float32Array> {
+  const input = new ort.Tensor('float32', preprocess(rgba, spec), [1, 3, SIZE, SIZE]);
+  const out = await session!.run({ input_image: input });
+  const mask = postprocess(out.output_image.data as Float32Array, spec);
+  applySensitivity(mask, sensitivity);
+  return mask;
+}
+
+async function run(id: string, rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number, params: RunParams = {}) {
   if (!session) throw new Error('not ready');
   const t = performance.now();
-  let mask = await infer(rgba);
+  const sens = params.sensitivity ?? 0;
+  let mask = await infer(rgba, sens);
   // Low-contrast subjects (a white shirt on a white wall) come back mottled. When that happens, take a second look
   // at a contrast-boosted copy and let it fill in what touches the subject.
   const u = uncertainty(mask);
   let passes = 1;
-  if (u > 0.025) { const plain = mask; const boosted = await infer(boostContrast(rgba)); mask = fuse(plain, boosted); settle(mask, plain); passes = 2; }
-  cleanComponents(mask);
-  fillHoles(mask);
+  const second = params.secondLook ?? 'auto';
+  if (second === 'on' || (second === 'auto' && u > 0.025)) {
+    const plain = mask; const boosted = await infer(boostContrast(rgba, 8, params.boost ?? 2.5), sens); mask = fuse(plain, boosted); settle(mask, plain); passes = 2;
+  }
+  const cleanup = params.cleanup ?? 'normal';
+  if (cleanup !== 'off') cleanComponents(mask, 0.5, cleanup);
+  if (params.fillHoles ?? true) fillHoles(mask);
   const t2 = performance.now();
-  const result = refineAlpha(full, width, height, mask, SIZE);
-  console.info('[remover] run', spec.name, backend, passes + ' pass' + (passes > 1 ? 'es' : ''), 'uncertainty', u.toFixed(3), Math.round(t2 - t), 'ms + refine', Math.round(performance.now() - t2), 'ms');
+  const result = refineAlpha(full, width, height, mask, SIZE, params.edge ?? 1);
+  console.info('[remover] run', spec.name, backend, passes + ' pass' + (passes > 1 ? 'es' : ''), 'uncertainty', u.toFixed(3), Math.round(t2 - t), 'ms + refine', Math.round(performance.now() - t2), 'ms', params);
   post({ type: 'result', id, rgba: result, width, height }, [result.buffer]);
 }
 
@@ -285,7 +309,7 @@ self.onmessage = async (e: MessageEvent<WorkerIn>) => {
   const msg = e.data;
   try {
     if (msg.type === 'init') await init(msg.base, msg.force);
-    else if (msg.type === 'run') await run(msg.id, msg.rgba, msg.full, msg.width, msg.height);
+    else if (msg.type === 'run') await run(msg.id, msg.rgba, msg.full, msg.width, msg.height, msg.params);
   } catch (err: any) {
     post({ type: 'error', id: (msg as any).id, message: err?.message || String(err) });
   }

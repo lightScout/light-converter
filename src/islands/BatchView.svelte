@@ -156,13 +156,13 @@
   .checker { background-color: rgba(244, 244, 247, 0.92); }
   .acts {
     position: absolute; left: 0; right: 0; bottom: 0;
-    display: flex; justify-content: center; gap: 18px; padding: 14px 0 12px;
-    background: linear-gradient(to top, rgba(3, 10, 24, 0.85), rgba(3, 10, 24, 0));
+    display: flex; justify-content: center; gap: 18px; padding: 34px 0 14px;
+    background: linear-gradient(to top, rgba(3, 10, 24, 0.96) 0%, rgba(6, 18, 44, 0.9) 45%, rgba(3, 10, 24, 0) 100%);
     opacity: 0; transform: translateY(6px);
     transition: opacity 180ms ease, transform 220ms var(--ease);
   }
-  .acts button { color: var(--muted); transition: color 200ms; }
-  .acts button:hover { color: var(--text); }
+  .acts button { color: var(--text); text-shadow: 0 1px 8px rgba(3, 10, 24, 0.9); transition: color 200ms, text-shadow 200ms; }
+  .acts button:hover { text-shadow: 0 0 12px rgba(var(--glow), 0.8); }
   .tile:hover .acts, .tile:focus-within .acts { opacity: 1; transform: none; }
   /* One loader: a point of light travelling around the card's edge. */
   .ring {

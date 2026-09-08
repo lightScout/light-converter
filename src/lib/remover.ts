@@ -2,7 +2,8 @@
  * Main-thread side of the free-tier remover: pre/post-processing on canvases,
  * inference in the worker. One shared worker/session per page.
  */
-import type { WorkerIn, WorkerOut } from './remover.worker';
+import type { WorkerIn, WorkerOut, RunParams } from './remover.worker';
+export type { RunParams };
 
 const SIZE = 1024;
 
@@ -73,7 +74,7 @@ async function decode(src: Blob): Promise<ImageBitmap> {
   return createImageBitmap(src);
 }
 
-async function inferOnce(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number): Promise<Result> {
+async function inferOnce(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number, params?: RunParams): Promise<Result> {
   const id = String(++seq);
   return new Promise<Result>((resolve, reject) => {
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`inference timed out after ${RUN_TIMEOUT_MS / 1000}s on ${status.backend}`)); }, RUN_TIMEOUT_MS);
@@ -81,28 +82,28 @@ async function inferOnce(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width
       resolve: (m) => { clearTimeout(timer); resolve(m); },
       reject: (e) => { clearTimeout(timer); reject(e); },
     });
-    const msg: WorkerIn = { type: 'run', id, rgba, full, width, height };
+    const msg: WorkerIn = { type: 'run', id, rgba, full, width, height, params };
     worker!.postMessage(msg, [rgba.buffer, full.buffer]);
   });
 }
 
 /** Infer; if WebGPU stalls or throws, restart on WASM once and retry. */
-async function infer(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number): Promise<Result> {
+async function infer(rgba: Uint8ClampedArray, full: Uint8ClampedArray, width: number, height: number, params?: RunParams): Promise<Result> {
   const copy = rgba.slice(), fullCopy = full.slice(); // buffers are transferred to the worker
   try {
-    return await inferOnce(rgba, full, width, height);
+    return await inferOnce(rgba, full, width, height, params);
   } catch (e) {
     if (status.backend === 'webgpu') {
       console.warn('[remover] webgpu run failed, retrying on wasm:', e);
       await restartOnWasm();
-      return inferOnce(copy, fullCopy, width, height);
+      return inferOnce(copy, fullCopy, width, height, params);
     }
     throw e;
   }
 }
 
 /** Returns a PNG blob with alpha. */
-export async function removeBackground(src: Blob): Promise<Blob> {
+export async function removeBackground(src: Blob, params?: RunParams): Promise<Blob> {
   await warmUp();
   const bmp = await decode(src);
   const { width: W, height: H } = bmp;
@@ -121,7 +122,7 @@ export async function removeBackground(src: Blob): Promise<Blob> {
   const full = fctx.getImageData(0, 0, W, H).data;
   bmp.close();
 
-  const res = await infer(px, full, W, H);
+  const res = await infer(px, full, W, H, params);
 
   const out = new OffscreenCanvas(W, H);
   const octx = out.getContext('2d')!;

@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import { urlFor, type BatchImage } from '../lib/batches';
   import { downloadImage } from '../lib/download';
+  import { removeBackground, type RunParams } from '../lib/remover';
 
   let { image, mode = 'preview', onclose, onsave }: { image: BatchImage; mode?: 'preview' | 'edit'; onclose: () => void; onsave: (result: Blob) => void } = $props();
 
@@ -22,6 +23,20 @@
   let zoom = $state(1);
   let pan = $state({ x: 0, y: 0 });
   let panning = false, panLast: [number, number] | null = null, space = false;
+  // model knobs — defaults reproduce the batch run
+  let showModel = $state(false);
+  let running = $state(false);
+  let params = $state<Required<RunParams>>({ sensitivity: 0, secondLook: 'auto', boost: 2.5, cleanup: 'normal', fillHoles: true, edge: 1 });
+  async function rerun() {
+    if (running) return;
+    running = true;
+    try {
+      const blob = await removeBackground(image.src, { ...params });
+      const bmp = await createImageBitmap(blob);
+      snapshot(); ctx.clearRect(0, 0, W, H); ctx.drawImage(bmp, 0, 0); bmp.close(); dirty = true;
+    } catch (e) { console.error('[viewer] rerun failed', e); }
+    finally { running = false; }
+  }
 
   let canvas: HTMLCanvasElement;                   // the working result (edited in place)
   let cursor: HTMLDivElement;
@@ -138,6 +153,31 @@
     <div class={`cursor ${tool}`} bind:this={cursor} style={`width:${size}px;height:${size}px;opacity:0`}><i class="core" style={`inset:${(100 - hardness) / 2}%`}></i><span>{tool === 'restore' ? '+' : '−'}</span></div>
   </div>
 
+  {#if mode === 'edit' && showModel}
+    <section class="model" aria-label="Model settings">
+      <div class="row">
+        <label class="param wide"><span class="label dim">Sensitivity</span><input type="range" min="-100" max="100" value={Math.round(params.sensitivity * 100)} oninput={(e) => params.sensitivity = Number((e.target as HTMLInputElement).value) / 100} /><span class="label val">{params.sensitivity > 0 ? '+' : ''}{Math.round(params.sensitivity * 100)}</span></label>
+        <span class="label dim note">− cuts more · + keeps more</span>
+      </div>
+      <div class="row">
+        <span class="label dim">Second look</span>
+        <span class="seg">{#each ['auto', 'on', 'off'] as v}<button class="label" class:on={params.secondLook === v} onclick={() => params.secondLook = v as any}>{v}</button>{/each}</span>
+        <label class="param"><span class="label dim">Boost</span><input type="range" min="1" max="4" step="0.1" bind:value={params.boost} /><span class="label val">{params.boost.toFixed(1)}</span></label>
+        <span class="label dim note">re-reads a contrast-boosted copy for subjects that blend into the background</span>
+      </div>
+      <div class="row">
+        <span class="label dim">Cleanup</span>
+        <span class="seg">{#each ['off', 'normal', 'strong'] as v}<button class="label" class:on={params.cleanup === v} onclick={() => params.cleanup = v as any}>{v}</button>{/each}</span>
+        <button class="label chk" class:on={params.fillHoles} onclick={() => params.fillHoles = !params.fillHoles}><i></i>Fill holes</button>
+        <label class="param"><span class="label dim">Edge detail</span><input type="range" min="0" max="100" value={Math.round(params.edge * 100)} oninput={(e) => params.edge = Number((e.target as HTMLInputElement).value) / 100} /><span class="label val">{Math.round(params.edge * 100)}</span></label>
+      </div>
+      <div class="row end">
+        <button class="label" onclick={() => params = { sensitivity: 0, secondLook: 'auto', boost: 2.5, cleanup: 'normal', fillHoles: true, edge: 1 }}>Reset</button>
+        <button class="bevel light" onclick={rerun} disabled={running}><i class="glyph"></i>{running ? 'Running…' : 'Run again'}</button>
+      </div>
+    </section>
+  {/if}
+
   <footer class="bottom cells">
     {#if mode === 'preview'}
       <span class="label dim">Backdrop</span>
@@ -154,6 +194,7 @@
         <button class="bevel tool erase" class:light={tool === 'erase'} role="radio" aria-checked={tool === 'erase'} onclick={() => tool = 'erase'}><i class="ico">−</i>Erase</button>
       </span>
       <span class="label dim hint">{tool === 'restore' ? 'Brings the original back' : 'Removes'}</span>
+      <button class="label mdl" class:on={showModel} onclick={() => showModel = !showModel}>Model{running ? ' …' : ''}</button>
       <span class="params">
         <label class="param"><span class="label dim">Size</span><input type="range" min="6" max="300" bind:value={size} /><span class="label val">{size}</span></label>
         <label class="param"><span class="label dim">Hardness</span><input type="range" min="0" max="100" bind:value={hardness} /><span class="label val">{hardness}</span></label>
@@ -167,16 +208,17 @@
 </div>
 
 <style>
-  .viewer { position: fixed; inset: 0; z-index: 40; background: rgba(3, 10, 24, 0.86); backdrop-filter: blur(16px); display: grid; grid-template-rows: auto 1fr auto; }
+  .viewer { position: fixed; inset: 0; z-index: 40; background: rgba(3, 10, 24, 0.86); backdrop-filter: blur(16px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; grid-template-columns: minmax(0, 1fr); }
   .top { display: flex; align-items: center; justify-content: space-between; padding: 30px 44px 0; }
   .top nav { display: flex; gap: 26px; }
   .top nav button, .bottom button.label, .tool { color: var(--dim); transition: color 200ms; }
   .top nav button:hover, .top nav button.on, .bottom button.label:hover, .tool.on { color: var(--text); }
-  .stage { position: relative; display: grid; place-items: center; padding: 24px 44px; overflow: hidden; }
-  .board { position: relative; transform-origin: center; transition: transform 120ms ease-out; max-width: 100%; max-height: calc(100vh - 220px); display: grid; --cut: 16px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+  .stage { position: relative; display: grid; place-items: center; padding: 24px 44px; overflow: hidden; min-height: 0; }
+  .board { position: relative; transform-origin: center; transition: transform 120ms ease-out; max-width: 100%; max-height: 100%; display: grid; place-items: center; --cut: 16px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
   .board.checker { background-color: #f0f0f0; background-image: linear-gradient(45deg, #c9c9c9 25%, transparent 25%), linear-gradient(-45deg, #c9c9c9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #c9c9c9 75%), linear-gradient(-45deg, transparent 75%, #c9c9c9 75%); background-size: 36px 36px; background-position: 0 0, 0 18px, 18px -18px, -18px 0; }
   .board.white { background: #fff; } .board.black { background: #000; } .board.navy { background: var(--base); }
-  canvas { display: block; max-width: 100%; max-height: calc(100vh - 220px); object-fit: contain; touch-action: none; }
+  canvas { display: block; max-width: 100%; max-height: calc(100vh - 230px); object-fit: contain; touch-action: none; }
+  .viewer:has(.model) canvas { max-height: calc(100vh - 400px); }
   .editing canvas { cursor: none; }
   .editing .board { transition: none; }
   .orig { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
@@ -193,16 +235,31 @@
   .hint { min-width: 150px; white-space: nowrap; }
   .zoom { display: flex; align-items: center; gap: 10px; }
   .zoom .z { min-width: 44px; text-align: center; }
-  .bottom { margin: 0 15px 15px; color: var(--muted); background: rgba(3, 10, 24, 0.55); }
+  .model { margin: 0 15px; padding: 14px 22px; display: grid; gap: 10px; background: rgba(3, 10, 24, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(var(--glow), 0.10); border-bottom: 0; }
+  .model .row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .model .row.end { justify-content: flex-end; }
+  .model .wide input { width: 220px; }
+  .model .note { color: var(--dim); font-size: 10px; }
+  .seg { display: inline-flex; border: 1px solid rgba(var(--glow), 0.14); }
+  .seg button { padding: 6px 12px; color: var(--dim); }
+  .seg button.on { background: rgba(var(--glow), 0.12); color: var(--text); }
+  .chk { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+  .chk i { width: 10px; height: 10px; border: 1px solid rgba(var(--glow), 0.4); }
+  .chk.on { color: var(--text); } .chk.on i { background: var(--lavender); box-shadow: 0 0 8px rgba(var(--glow), 0.6); }
+  .mdl { color: var(--dim); } .mdl.on { color: var(--text); }
+  .bottom { margin: 0 15px 15px; color: var(--muted); background: rgba(3, 10, 24, 0.55); min-width: 0; }
+  .bottom > * { padding: 0 16px; }
+  .bottom .hint { display: none; }
+  @media (min-width: 1500px) { .bottom .hint { display: flex; } }
   .chips { display: flex; gap: 10px; }
   .swatch { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.25); transition: box-shadow 200ms; }
   .swatch.on { box-shadow: 0 0 0 1px var(--text), 0 0 10px rgba(var(--glow), 0.6); }
   .swatch.checker { background: repeating-conic-gradient(#c9c9c9 0 25%, #f0f0f0 0 50%) 0 0 / 8px 8px; }
   .swatch.white { background: #fff; } .swatch.black { background: #000; } .swatch.navy { background: var(--base); }
-  .params { display: flex; gap: 22px; }
+  .params { display: flex; gap: 16px; }
   .param { display: flex; align-items: center; gap: 8px; }
   .val { min-width: 26px; text-align: right; color: var(--muted); }
-  input[type=range] { width: 96px; accent-color: var(--lavender); }
+  input[type=range] { width: 84px; accent-color: var(--lavender); }
   .bottom .bevel { margin-left: 8px; }
   button:disabled { opacity: 0.4; }
 </style>
