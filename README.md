@@ -62,14 +62,14 @@ The site is static — any host works. Two things matter:
 
 ## How it is built
 
-| Layer | Choice |
-|---|---|
-| Framework | [Astro 7](https://astro.build) with `ClientRouter` for client-side navigation |
-| Islands | [Svelte 5](https://svelte.dev) (runes) |
-| 3D | [Three.js](https://threejs.org) — the landing hero and the ambient scene on every page |
-| Inference | [onnxruntime-web](https://onnxruntime.ai) in a Web Worker |
-| Scroll | [Lenis](https://lenis.darkroom.engineering) with snap points on the landing |
-| Storage | IndexedDB (batches) + Cache Storage (model bytes) |
+| Layer     | Choice                                                                                 |
+| --------- | -------------------------------------------------------------------------------------- |
+| Framework | [Astro 7](https://astro.build) with `ClientRouter` for client-side navigation          |
+| Islands   | [Svelte 5](https://svelte.dev) (runes)                                                 |
+| 3D        | [Three.js](https://threejs.org) — the landing hero and the ambient scene on every page |
+| Inference | [onnxruntime-web](https://onnxruntime.ai) in a Web Worker                              |
+| Scroll    | [Lenis](https://lenis.darkroom.engineering) with snap points on the landing            |
+| Storage   | IndexedDB (batches) + Cache Storage (model bytes)                                      |
 
 ```
 src/
@@ -110,10 +110,10 @@ Every knob in that pipeline (`sensitivity`, `secondLook`, `boost`, `cleanup`, `f
 
 ## Models and their licences
 
-| Model | Licence | Source |
-|---|---|---|
-| BiRefNet (swin_v1_tiny) | MIT | [ZhengPeng7/BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
-| IS-Net (DIS) | Apache-2.0 | [xuebinqin/DIS](https://github.com/xuebinqin/DIS), ONNX export via [rembg](https://github.com/danielgatis/rembg) |
+| Model                   | Licence    | Source                                                                                                           |
+| ----------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| BiRefNet (swin_v1_tiny) | MIT        | [ZhengPeng7/BiRefNet](https://github.com/ZhengPeng7/BiRefNet)                                                    |
+| IS-Net (DIS)            | Apache-2.0 | [xuebinqin/DIS](https://github.com/xuebinqin/DIS), ONNX export via [rembg](https://github.com/danielgatis/rembg) |
 
 The code in this repository is MIT. The models keep their own licences.
 
@@ -129,4 +129,4 @@ Please keep the visual language of the app — minimal copy, few elements — wh
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Juan Muller Da Costa e Silva
+[MIT](LICENSE)
